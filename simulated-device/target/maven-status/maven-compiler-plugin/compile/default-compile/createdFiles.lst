@@ -1,0 +1,11 @@
+com\mycompany\app\DeviceManagement\WaterDeviceThread.class
+com\mycompany\app\DeviceManagement\DeviceTwinStatusCallback.class
+com\mycompany\app\DeviceManagement\DirectMethodStatusCallback.class
+com\mycompany\app\DeviceManagement\RebootDeviceThread.class
+com\mycompany\app\MessageSender\MessageSender.class
+com\mycompany\app\DeviceManagement\PropertyCallback.class
+com\mycompany\app\SensorSimulation.class
+com\mycompany\app\DeviceManagement\DirectMethodCallback.class
+com\mycompany\app\MessageSender\TelemetryDataPoint.class
+com\mycompany\app\App.class
+com\mycompany\app\MessageSender\EventCallback.class
