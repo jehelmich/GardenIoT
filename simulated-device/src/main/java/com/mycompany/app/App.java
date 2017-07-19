@@ -19,9 +19,10 @@ import java.util.concurrent.ExecutorService;
  */
 public class App
 {
-    private static String connString = "HostName=GardenIOT.azure-devices.net;DeviceId=garden_1;SharedAccessKey=78TPfIdEq3lBbBNPTliqrQugesnI+r0/QN2PT7TaRQI=";
+    // TODO: Adjust for your IoT Hub
+    private static String connString = "Your Connection String";
     private static IotHubClientProtocol protocol = IotHubClientProtocol.MQTT;
-    private static String deviceId = "garden_1";
+    private static String deviceId = "YourDeviceID";
     private static DeviceClient client;
     private static SensorSimulation sm;
 
