@@ -16,9 +16,10 @@ import java.util.function.*;
  */
 public class App 
 {
-    private static String connStr = "Endpoint=sb://iothub-ns-gardeniot-186566-bb9c9e9bff.servicebus.windows.net/;SharedAccessKeyName=iothubowner;SharedAccessKey=stJm/GKjo9w41KvQq0oyHi7B197ZIdQMjfWbub80bxk=;EntityPath=gardeniot;SharedAccessKeyName=iothubowner;SharedAccessKey=stJm/GKjo9w41KvQq0oyHi7B197ZIdQMjfWbub80bxk=";
-    public static final String iotHubConnectionString = "HostName=GardenIOT.azure-devices.net;SharedAccessKeyName=iothubowner;SharedAccessKey=stJm/GKjo9w41KvQq0oyHi7B197ZIdQMjfWbub80bxk=";
-    public static final String deviceId = "garden_1";
+    // TODO: Configure for your personal IoT Hub
+    private static String connStr = "Enter your Endpoint String here";
+    public static final String iotHubConnectionString = "Enter your connection String here";
+    public static final String deviceId = "YourDeviceID;
 
     public static final Long responseTimeout = TimeUnit.SECONDS.toSeconds(30);
     public static final Long connectTimeout = TimeUnit.SECONDS.toSeconds(5);
