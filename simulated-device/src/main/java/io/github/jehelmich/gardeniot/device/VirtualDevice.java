@@ -113,7 +113,7 @@ public final class VirtualDevice implements AutoCloseable {
         reportState();
     }
 
-    SimulationState state() {
+    public SimulationState state() {
         Reading truth = plant.current();
         return new SimulationState(truth.humidity(), truth.temperature(), fault, speed,
                 waterings, lastWatered, clock.instant());

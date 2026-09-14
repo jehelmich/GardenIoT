@@ -1,0 +1,56 @@
+# The whole system on one machine, no cloud account needed:
+#
+#   docker compose up --build
+#
+# Two plants (basil, mint) dry out, the controller waters them. Watch the logs, or open the
+# monitoring page at http://localhost:8088 once the garden-ui service is up.
+#
+# Add a third device process with its own plant:
+#   docker compose run -d -e DEVICE_IDS=thyme device
+
+name: gardeniot
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.0.22
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./deploy/mosquitto:/mosquitto/config:ro
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-h", "localhost", "-t", "$$SYS/broker/uptime", "-C", "1", "-W", "3"]
+      interval: 5s
+      timeout: 5s
+      retries: 6
+
+  controller:
+    build:
+      context: .
+      args:
+        MODULE: controller
+    image: ghcr.io/jehelmich/gardeniot-controller:local
+    environment:
+      TRANSPORT: mqtt
+      MQTT_HOST: mosquitto
+      HUMIDITY_THRESHOLD: ${HUMIDITY_THRESHOLD:-25}
+      WATERING_COOLDOWN_SECONDS: ${WATERING_COOLDOWN_SECONDS:-60}
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    restart: unless-stopped
+
+  device:
+    build:
+      context: .
+      args:
+        MODULE: simulated-device
+    image: ghcr.io/jehelmich/gardeniot-simulated-device:local
+    environment:
+      TRANSPORT: mqtt
+      MQTT_HOST: mosquitto
+      DEVICE_IDS: ${DEVICE_IDS:-basil,mint}
+      TELEMETRY_INTERVAL_SECONDS: ${TELEMETRY_INTERVAL_SECONDS:-5}
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    restart: unless-stopped

@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1.7
+#
+# One Dockerfile for every application module; pick the module with a build argument:
+#   docker build --build-arg MODULE=controller -t gardeniot/controller .
+#
+# Stage 1 builds the shaded jar with the Maven wrapper (dependencies cached between builds);
+# stage 2 is a small JRE image running as an unprivileged user.
+
+ARG JAVA_VERSION=21
+
+FROM eclipse-temurin:${JAVA_VERSION}-jdk-alpine AS build
+ARG MODULE
+WORKDIR /src
+COPY . .
+RUN --mount=type=cache,target=/root/.m2 \
+    ./mvnw --batch-mode --no-transfer-progress -pl ${MODULE} -am package -DskipTests -Dspotless.check.skip
+
+FROM eclipse-temurin:${JAVA_VERSION}-jre-alpine
+ARG MODULE
+LABEL org.opencontainers.image.source="https://github.com/jehelmich/GardenIoT" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.title="gardeniot-${MODULE}"
+RUN addgroup -S app && adduser -S -G app app
+USER app
+WORKDIR /app
+COPY --from=build --chown=app:app /src/${MODULE}/target/${MODULE}.jar app.jar
+# Metrics and health endpoints (see METRICS_PORT); harmless for images that do not serve them.
+EXPOSE 8080
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
+ENTRYPOINT ["java", "-jar", "app.jar"]

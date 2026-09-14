@@ -1,0 +1,12 @@
+.git
+.github
+.idea
+**/target
+docs
+deploy
+!deploy/mosquitto
+*.md
+LICENSE
+Dockerfile
+docker-compose.yml
+.env
