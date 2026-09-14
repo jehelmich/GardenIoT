@@ -12,17 +12,34 @@
 
   <artifactId>controller</artifactId>
   <name>GardenIoT :: Controller</name>
+  <description>Cloud-side controller that watches device telemetry and triggers watering through a direct method.</description>
+
+  <properties>
+    <mainClass>io.github.jehelmich.gardeniot.controller.ControllerApp</mainClass>
+  </properties>
 
   <dependencies>
     <dependency>
-      <groupId>com.microsoft.azure</groupId>
-      <artifactId>azure-eventhubs</artifactId>
-      <version>0.13.0</version>
+      <groupId>io.github.jehelmich.gardeniot</groupId>
+      <artifactId>common</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.azure</groupId>
+      <artifactId>azure-messaging-eventhubs</artifactId>
     </dependency>
     <dependency>
       <groupId>com.microsoft.azure.sdk.iot</groupId>
       <artifactId>iot-service-client</artifactId>
-      <version>1.5.22</version>
     </dependency>
   </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
 </project>
