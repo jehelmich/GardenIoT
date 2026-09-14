@@ -7,7 +7,8 @@ import java.util.Random;
  *
  * <p>Soil humidity evaporates a little on every reading, faster when it is warm, until it
  * bottoms out at {@code minHumidity}. Watering resets it to 100&nbsp;%. Air temperature does a
- * small random walk and drifts back up when it falls below {@code minTemperature}.
+ * small random walk that is gently pulled back towards room temperature, and drifts up faster
+ * when it falls below {@code minTemperature}.
  *
  * <p>Readings are produced by the telemetry loop while {@link #water()} is invoked from the direct
  * method callback, so the state is guarded by the instance monitor.
@@ -23,6 +24,7 @@ public final class PlantSimulation {
     private static final double EVAPORATION_PER_DEGREE = 0.01;
     private static final double TEMPERATURE_STEP = 0.15;
     private static final double TEMPERATURE_RECOVERY_STEP = 0.3;
+    private static final double TEMPERATURE_REVERSION = 0.02;
 
     private final double minTemperature;
     private final double minHumidity;
@@ -65,7 +67,8 @@ public final class PlantSimulation {
             temperature += random.nextDouble() * TEMPERATURE_RECOVERY_STEP;
             return;
         }
-        double r = random.nextDouble();
-        temperature += (r >= 0.5 ? r : -r) * TEMPERATURE_STEP;
+        double step = (random.nextDouble() * 2.0 - 1.0) * TEMPERATURE_STEP;
+        double reversion = (INITIAL_TEMPERATURE - temperature) * TEMPERATURE_REVERSION;
+        temperature += step + reversion;
     }
 }

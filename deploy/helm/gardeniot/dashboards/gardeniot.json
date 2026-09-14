@@ -231,7 +231,7 @@
     },
     {
       "id": 4,
-      "type": "state-timeline",
+      "type": "stat",
       "title": "Sensor fault",
       "gridPos": {
         "x": 16,
@@ -265,19 +265,23 @@
               "options": {
                 "0": {
                   "text": "healthy",
-                  "color": "green"
+                  "color": "green",
+                  "index": 0
                 },
                 "1": {
                   "text": "stuck",
-                  "color": "orange"
+                  "color": "orange",
+                  "index": 1
                 },
                 "2": {
                   "text": "over-reading",
-                  "color": "red"
+                  "color": "red",
+                  "index": 2
                 },
                 "3": {
                   "text": "silent",
-                  "color": "dark-red"
+                  "color": "dark-red",
+                  "index": 3
                 }
               }
             }
@@ -288,6 +292,18 @@
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 2
+              },
+              {
+                "color": "dark-red",
+                "value": 3
               }
             ]
           }
@@ -295,12 +311,17 @@
         "overrides": []
       },
       "options": {
-        "showValue": "auto",
-        "rowHeight": 0.8,
-        "mergeValues": true,
-        "legend": {
-          "displayMode": "hidden"
-        }
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "none",
+        "orientation": "auto"
       },
       "description": "Faults are injected with the `fault` command. A faulty sensor is how a plant dies in this system: the controller trusts what it is told."
     },

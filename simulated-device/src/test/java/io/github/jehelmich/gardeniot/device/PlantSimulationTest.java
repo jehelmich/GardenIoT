@@ -54,6 +54,22 @@ class PlantSimulationTest {
     }
 
     @Test
+    void temperatureStaysAroundRoomTemperature() {
+        PlantSimulation plant = new PlantSimulation(15.0, 15.0, new Random(SEED));
+
+        double max = 0;
+        double min = 100;
+        for (int i = 0; i < 100_000; i++) {
+            double t = plant.next().temperature();
+            max = Math.max(max, t);
+            min = Math.min(min, t);
+        }
+
+        assertThat(min).isGreaterThan(15.0);
+        assertThat(max).isLessThan(30.0);
+    }
+
+    @Test
     void temperatureRecoversWhenBelowTheMinimum() {
         PlantSimulation plant = new PlantSimulation(30.0, 15.0, new Random(SEED));
         double start = plant.current().temperature();
