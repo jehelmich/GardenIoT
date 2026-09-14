@@ -6,9 +6,6 @@ import io.github.jehelmich.gardeniot.telemetry.Json;
 import io.github.jehelmich.gardeniot.transport.CommandHandler;
 import io.github.jehelmich.gardeniot.transport.CommandResult;
 import io.github.jehelmich.gardeniot.transport.DeviceTransportFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.time.Clock;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +14,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The plants hosted by this process, and the fleet commands that add and remove them:
@@ -54,9 +53,15 @@ public final class DeviceFleet implements CommandHandler, AutoCloseable {
 
     public VirtualDevice add(String deviceId) throws Exception {
         DeviceConfig.requireValidId(deviceId);
-        VirtualDevice device = new VirtualDevice(deviceId,
+        VirtualDevice device = new VirtualDevice(
+                deviceId,
                 new PlantSimulation(MIN_TEMPERATURE, MIN_HUMIDITY, new Random()),
-                config.telemetryInterval(), config.actionDuration(), clock, scheduler, actions, metrics);
+                config.telemetryInterval(),
+                config.actionDuration(),
+                clock,
+                scheduler,
+                actions,
+                metrics);
         if (devices.putIfAbsent(deviceId, device) != null) {
             throw new IllegalStateException("Device '" + deviceId + "' is already hosted here");
         }
@@ -120,7 +125,8 @@ public final class DeviceFleet implements CommandHandler, AutoCloseable {
     private static String deviceIdIn(String payloadJson) {
         try {
             JsonElement payload = Json.tree(payloadJson);
-            if (payload instanceof JsonObject object && object.get("deviceId") != null
+            if (payload instanceof JsonObject object
+                    && object.get("deviceId") != null
                     && object.get("deviceId").isJsonPrimitive()) {
                 return object.get("deviceId").getAsString();
             }

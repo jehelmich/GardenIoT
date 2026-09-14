@@ -3,14 +3,13 @@ package io.github.jehelmich.gardeniot.observability;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import io.github.jehelmich.gardeniot.config.Environment;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.function.BooleanSupplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A tiny HTTP server for the three endpoints an orchestrator wants:
@@ -37,7 +36,8 @@ public final class ObservabilityServer implements AutoCloseable {
     }
 
     /** @return the running server, or {@code null} if disabled */
-    public static ObservabilityServer start(Environment env, Metrics metrics, BooleanSupplier ready) throws IOException {
+    public static ObservabilityServer start(Environment env, Metrics metrics, BooleanSupplier ready)
+            throws IOException {
         int port = (int) env.optionalDouble(PORT, DEFAULT_PORT);
         if (port <= 0) {
             return null;
@@ -47,8 +47,9 @@ public final class ObservabilityServer implements AutoCloseable {
 
     public static ObservabilityServer start(int port, Metrics metrics, BooleanSupplier ready) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
-        server.createContext("/metrics", exchange -> respond(exchange, 200,
-                "text/plain; version=0.0.4; charset=utf-8", metrics.scrape()));
+        server.createContext(
+                "/metrics",
+                exchange -> respond(exchange, 200, "text/plain; version=0.0.4; charset=utf-8", metrics.scrape()));
         server.createContext("/healthz", exchange -> respond(exchange, 200, "text/plain", "ok\n"));
         server.createContext("/readyz", exchange -> {
             if (ready.getAsBoolean()) {

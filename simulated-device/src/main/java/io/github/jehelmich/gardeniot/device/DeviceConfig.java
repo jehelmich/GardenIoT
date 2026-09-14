@@ -2,7 +2,6 @@ package io.github.jehelmich.gardeniot.device;
 
 import io.github.jehelmich.gardeniot.config.Environment;
 import io.github.jehelmich.gardeniot.config.Transport;
-
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
@@ -15,10 +14,8 @@ import java.util.List;
  * @param telemetryInterval how often a reading is published at simulation speed 1
  * @param actionDuration    how long the simulated pump and reboot take at speed 1
  */
-public record DeviceConfig(Transport transport,
-                           List<String> deviceIds,
-                           Duration telemetryInterval,
-                           Duration actionDuration) {
+public record DeviceConfig(
+        Transport transport, List<String> deviceIds, Duration telemetryInterval, Duration actionDuration) {
 
     public static final String DEVICE_IDS = "DEVICE_IDS";
     public static final String TELEMETRY_INTERVAL = "TELEMETRY_INTERVAL_SECONDS";
@@ -43,8 +40,8 @@ public record DeviceConfig(Transport transport,
     /** Device ids end up in topic names and URLs, so keep them to a safe alphabet. */
     static void requireValidId(String id) {
         if (!id.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,63}")) {
-            throw new IllegalArgumentException("Device id '" + id
-                    + "' must be 1-64 characters of letters, digits, '.', '_' or '-'");
+            throw new IllegalArgumentException(
+                    "Device id '" + id + "' must be 1-64 characters of letters, digits, '.', '_' or '-'");
         }
     }
 }

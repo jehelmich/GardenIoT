@@ -1,5 +1,8 @@
 package io.github.jehelmich.gardeniot.it;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+
 import io.github.jehelmich.gardeniot.config.Transport;
 import io.github.jehelmich.gardeniot.controller.CommandWateringActuator;
 import io.github.jehelmich.gardeniot.controller.ControllerMetrics;
@@ -17,20 +20,16 @@ import io.github.jehelmich.gardeniot.transport.mqtt.MqttCommandSender;
 import io.github.jehelmich.gardeniot.transport.mqtt.MqttDeviceTransportFactory;
 import io.github.jehelmich.gardeniot.transport.mqtt.MqttSettings;
 import io.github.jehelmich.gardeniot.transport.mqtt.MqttTelemetrySource;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.awaitility.Awaitility.await;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * The whole loop over a real broker: a plant dries out, the controller notices, commands
@@ -60,21 +59,26 @@ class WateringLoopIT {
 
         // device side
         deviceTransports = new MqttDeviceTransportFactory(settings);
-        fleet = new DeviceFleet(new DeviceConfig(Transport.MQTT, List.of(), TICK, Duration.ZERO),
-                deviceTransports, Clock.systemUTC(), new DeviceMetrics(new Metrics()));
+        fleet = new DeviceFleet(
+                new DeviceConfig(Transport.MQTT, List.of(), TICK, Duration.ZERO),
+                deviceTransports,
+                Clock.systemUTC(),
+                new DeviceMetrics(new Metrics()));
         fleetChannel = deviceTransports.fleetChannel().orElseThrow();
         fleetChannel.subscribe(fleet);
 
         // cloud side
         commands = new MqttCommandSender(settings).start();
         WateringPolicy policy = new WateringPolicy(25.0, Duration.ofSeconds(2), Clock.systemUTC());
-        TelemetryProcessor processor = new TelemetryProcessor(policy, new CommandWateringActuator(commands),
-                new ControllerMetrics(new Metrics()));
+        TelemetryProcessor processor = new TelemetryProcessor(
+                policy, new CommandWateringActuator(commands), new ControllerMetrics(new Metrics()));
         source = new MqttTelemetrySource(settings);
-        source.start(telemetry -> {
-            seen.add(telemetry);
-            processor.onTelemetry(telemetry);
-        }, streamFailure::set);
+        source.start(
+                telemetry -> {
+                    seen.add(telemetry);
+                    processor.onTelemetry(telemetry);
+                },
+                streamFailure::set);
     }
 
     @AfterEach
@@ -90,12 +94,14 @@ class WateringLoopIT {
     void aDryPlantGetsWatered() throws Exception {
         VirtualDevice basil = fleet.add("basil");
 
-        await().atMost(Duration.ofSeconds(20)).untilAsserted(() ->
-                assertThat(seen).anyMatch(t -> t.deviceId().equals("basil") && t.humidity() < 25.0));
-        await().atMost(Duration.ofSeconds(20)).untilAsserted(() ->
-                assertThat(basil.state().waterings()).isGreaterThanOrEqualTo(1));
-        await().atMost(Duration.ofSeconds(20)).untilAsserted(() ->
-                assertThat(seen).anyMatch(t -> t.deviceId().equals("basil") && t.humidity() > 90.0));
+        await().atMost(Duration.ofSeconds(20))
+                .untilAsserted(
+                        () -> assertThat(seen).anyMatch(t -> t.deviceId().equals("basil") && t.humidity() < 25.0));
+        await().atMost(Duration.ofSeconds(20))
+                .untilAsserted(() -> assertThat(basil.state().waterings()).isGreaterThanOrEqualTo(1));
+        await().atMost(Duration.ofSeconds(20))
+                .untilAsserted(
+                        () -> assertThat(seen).anyMatch(t -> t.deviceId().equals("basil") && t.humidity() > 90.0));
         assertThat(streamFailure.get()).isNull();
     }
 
@@ -121,18 +127,26 @@ class WateringLoopIT {
         assertThat(fleet.deviceIds()).contains("thyme");
 
         // Freeze the sensor at its first (damp) reading: the soil dries but the controller never learns.
-        await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
-                assertThat(seen).anyMatch(t -> t.deviceId().equals("thyme")));
-        assertThat(commands.send("thyme", "fault", java.util.Map.of("type", "STUCK")).status()).isEqualTo(200);
+        await().atMost(Duration.ofSeconds(10))
+                .untilAsserted(() -> assertThat(seen).anyMatch(t -> t.deviceId().equals("thyme")));
+        assertThat(commands.send("thyme", "fault", java.util.Map.of("type", "STUCK"))
+                        .status())
+                .isEqualTo(200);
 
         Thread.sleep(TICK.toMillis() * 15);
         CommandResult status = commands.send("thyme", "status", null);
         assertThat(status.payload().toString()).contains("\"waterings\":0");
-        assertThat(seen.stream().filter(t -> t.deviceId().equals("thyme")).map(Telemetry::humidity).distinct().count())
-                .as("a stuck sensor repeats one value").isLessThanOrEqualTo(2);
+        assertThat(seen.stream()
+                        .filter(t -> t.deviceId().equals("thyme"))
+                        .map(Telemetry::humidity)
+                        .distinct()
+                        .count())
+                .as("a stuck sensor repeats one value")
+                .isLessThanOrEqualTo(2);
 
-        assertThat(commands.sendToFleet("removePlant", java.util.Map.of("deviceId", "thyme")).status()).isEqualTo(200);
+        assertThat(commands.sendToFleet("removePlant", java.util.Map.of("deviceId", "thyme"))
+                        .status())
+                .isEqualTo(200);
         assertThat(fleet.deviceIds()).doesNotContain("thyme");
     }
-
 }

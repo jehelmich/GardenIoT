@@ -14,13 +14,14 @@ import java.time.Instant;
  * @param lastWatered     when the pump last ran, or {@code null}
  * @param updatedAt       when this state was reported
  */
-public record SimulationState(double trueHumidity,
-                              double trueTemperature,
-                              SensorFault fault,
-                              double speed,
-                              int waterings,
-                              Instant lastWatered,
-                              Instant updatedAt) {
+public record SimulationState(
+        double trueHumidity,
+        double trueTemperature,
+        SensorFault fault,
+        double speed,
+        int waterings,
+        Instant lastWatered,
+        Instant updatedAt) {
 
     public static final String NAME = "simulation";
 }

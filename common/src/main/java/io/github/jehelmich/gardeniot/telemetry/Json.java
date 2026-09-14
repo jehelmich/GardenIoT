@@ -15,8 +15,7 @@ public final class Json {
             .serializeSpecialFloatingPointValues()
             .create();
 
-    private Json() {
-    }
+    private Json() {}
 
     public static String stringify(Object value) {
         return GSON.toJson(value);

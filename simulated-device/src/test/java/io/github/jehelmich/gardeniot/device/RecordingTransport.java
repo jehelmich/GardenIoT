@@ -4,7 +4,6 @@ import io.github.jehelmich.gardeniot.telemetry.Telemetry;
 import io.github.jehelmich.gardeniot.transport.CommandHandler;
 import io.github.jehelmich.gardeniot.transport.DeviceTransport;
 import io.github.jehelmich.gardeniot.transport.DeviceTransportFactory;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;

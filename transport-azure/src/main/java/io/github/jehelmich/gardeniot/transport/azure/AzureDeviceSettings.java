@@ -2,7 +2,6 @@ package io.github.jehelmich.gardeniot.transport.azure;
 
 import com.microsoft.azure.sdk.iot.device.IotHubClientProtocol;
 import io.github.jehelmich.gardeniot.config.Environment;
-
 import java.util.Arrays;
 
 /**
@@ -25,7 +24,9 @@ public record AzureDeviceSettings(String connectionString, String deviceId, IotH
         String connectionString = env.required(CONNECTION_STRING);
         String protocol = env.optional(PROTOCOL, IotHubClientProtocol.MQTT.name());
         try {
-            return new AzureDeviceSettings(connectionString, deviceIdOf(connectionString),
+            return new AzureDeviceSettings(
+                    connectionString,
+                    deviceIdOf(connectionString),
                     IotHubClientProtocol.valueOf(protocol.toUpperCase()));
         } catch (IllegalArgumentException e) {
             throw new IllegalStateException(PROTOCOL + " must be one of "
@@ -41,7 +42,7 @@ public record AzureDeviceSettings(String connectionString, String deviceId, IotH
                 .map(segment -> segment.substring("DeviceId=".length()))
                 .filter(id -> !id.isBlank())
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException(
-                        CONNECTION_STRING + " does not contain a DeviceId segment"));
+                .orElseThrow(
+                        () -> new IllegalStateException(CONNECTION_STRING + " does not contain a DeviceId segment"));
     }
 }

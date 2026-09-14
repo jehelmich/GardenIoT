@@ -3,7 +3,6 @@ package io.github.jehelmich.gardeniot.transport.azure;
 import com.azure.core.credential.TokenCredential;
 import com.azure.messaging.eventhubs.EventHubClientBuilder;
 import io.github.jehelmich.gardeniot.config.Environment;
-
 import java.time.Duration;
 import java.util.Optional;
 
@@ -24,14 +23,15 @@ import java.util.Optional;
  * @param methodResponseTimeout how long to wait for a device to answer a direct method
  * @param methodConnectTimeout  how long to wait for a device to be reachable
  */
-public record AzureServiceSettings(Optional<String> hubHostName,
-                                   Optional<String> eventHubNamespace,
-                                   Optional<String> eventHubName,
-                                   Optional<String> serviceConnectionString,
-                                   Optional<String> eventHubConnectionString,
-                                   String consumerGroup,
-                                   Duration methodResponseTimeout,
-                                   Duration methodConnectTimeout) {
+public record AzureServiceSettings(
+        Optional<String> hubHostName,
+        Optional<String> eventHubNamespace,
+        Optional<String> eventHubName,
+        Optional<String> serviceConnectionString,
+        Optional<String> eventHubConnectionString,
+        String consumerGroup,
+        Duration methodResponseTimeout,
+        Duration methodConnectTimeout) {
 
     public static final String HUB_HOSTNAME = "AZURE_IOTHUB_HOSTNAME";
     public static final String EVENTHUB_NAMESPACE = "AZURE_EVENTHUB_NAMESPACE";
@@ -42,13 +42,13 @@ public record AzureServiceSettings(Optional<String> hubHostName,
 
     public AzureServiceSettings {
         if (hubHostName.isEmpty() && serviceConnectionString.isEmpty()) {
-            throw new IllegalStateException("Set " + HUB_HOSTNAME + " (Entra ID) or "
-                    + SERVICE_CONNECTION_STRING + " (shared access key) to reach the hub");
+            throw new IllegalStateException("Set " + HUB_HOSTNAME + " (Entra ID) or " + SERVICE_CONNECTION_STRING
+                    + " (shared access key) to reach the hub");
         }
         boolean identity = eventHubNamespace.isPresent() && eventHubName.isPresent();
         if (!identity && eventHubConnectionString.isEmpty()) {
-            throw new IllegalStateException("Set " + EVENTHUB_NAMESPACE + " and " + EVENTHUB_NAME
-                    + " (Entra ID) or " + EVENTHUB_CONNECTION_STRING + " (shared access key) to read telemetry");
+            throw new IllegalStateException("Set " + EVENTHUB_NAMESPACE + " and " + EVENTHUB_NAME + " (Entra ID) or "
+                    + EVENTHUB_CONNECTION_STRING + " (shared access key) to read telemetry");
         }
     }
 

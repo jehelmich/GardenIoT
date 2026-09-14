@@ -1,7 +1,6 @@
 package io.github.jehelmich.gardeniot.controller;
 
 import io.github.jehelmich.gardeniot.telemetry.Telemetry;
-
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;

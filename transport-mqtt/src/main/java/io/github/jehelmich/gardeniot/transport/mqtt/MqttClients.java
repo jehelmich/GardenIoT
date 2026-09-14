@@ -4,13 +4,12 @@ import com.hivemq.client.mqtt.MqttClient;
 import com.hivemq.client.mqtt.datatypes.MqttQos;
 import com.hivemq.client.mqtt.mqtt5.Mqtt5AsyncClient;
 import com.hivemq.client.mqtt.mqtt5.Mqtt5ClientBuilder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Builds and connects clients with the settings every adapter shares. */
 final class MqttClients {
@@ -20,8 +19,7 @@ final class MqttClients {
     static final MqttQos QOS = MqttQos.AT_LEAST_ONCE;
     private static final long CONNECT_TIMEOUT_SECONDS = 30;
 
-    private MqttClients() {
-    }
+    private MqttClients() {}
 
     /**
      * @param willTopic if non-null, the broker publishes {@code willPayload} there, retained,
@@ -35,11 +33,13 @@ final class MqttClients {
                 .serverHost(settings.host())
                 .serverPort(settings.port())
                 .automaticReconnectWithDefaultConfig()
-                .addConnectedListener(context -> log.info("{}: connected to {}:{}",
-                        clientId, settings.host(), settings.port()))
+                .addConnectedListener(
+                        context -> log.info("{}: connected to {}:{}", clientId, settings.host(), settings.port()))
                 .addDisconnectedListener(context -> {
                     if (context.getReconnector().isReconnect()) {
-                        log.warn("{}: disconnected ({}), reconnecting", clientId,
+                        log.warn(
+                                "{}: disconnected ({}), reconnecting",
+                                clientId,
                                 context.getCause().getMessage());
                     }
                 });
@@ -64,8 +64,10 @@ final class MqttClients {
         try {
             client.connect().get(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         } catch (ExecutionException e) {
-            throw new IllegalStateException("Could not connect to MQTT broker at " + settings.host()
-                    + ":" + settings.port() + ": " + e.getCause().getMessage(), e.getCause());
+            throw new IllegalStateException(
+                    "Could not connect to MQTT broker at " + settings.host() + ":" + settings.port() + ": "
+                            + e.getCause().getMessage(),
+                    e.getCause());
         }
         return client;
     }

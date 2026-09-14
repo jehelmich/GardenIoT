@@ -4,9 +4,6 @@ import io.github.jehelmich.gardeniot.device.PlantSimulation.Reading;
 import io.github.jehelmich.gardeniot.telemetry.Telemetry;
 import io.github.jehelmich.gardeniot.transport.DeviceTransport;
 import io.github.jehelmich.gardeniot.transport.DeviceTransportFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -14,6 +11,8 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * One simulated plant with its sensor, pump and connection.
@@ -45,14 +44,15 @@ public final class VirtualDevice implements AutoCloseable {
     private volatile ScheduledFuture<?> nextTick;
     private volatile boolean closed;
 
-    public VirtualDevice(String deviceId,
-                         PlantSimulation plant,
-                         Duration telemetryInterval,
-                         Duration actionDuration,
-                         Clock clock,
-                         ScheduledExecutorService scheduler,
-                         Executor actions,
-                         DeviceMetrics metrics) {
+    public VirtualDevice(
+            String deviceId,
+            PlantSimulation plant,
+            Duration telemetryInterval,
+            Duration actionDuration,
+            Clock clock,
+            ScheduledExecutorService scheduler,
+            Executor actions,
+            DeviceMetrics metrics) {
         this.metrics = metrics;
         this.deviceId = deviceId;
         this.plant = plant;
@@ -123,8 +123,8 @@ public final class VirtualDevice implements AutoCloseable {
 
     public SimulationState state() {
         Reading truth = plant.current();
-        return new SimulationState(truth.humidity(), truth.temperature(), fault, speed,
-                waterings, lastWatered, clock.instant());
+        return new SimulationState(
+                truth.humidity(), truth.temperature(), fault, speed, waterings, lastWatered, clock.instant());
     }
 
     // --- the telemetry loop -----------------------------------------------------------------
@@ -140,9 +140,14 @@ public final class VirtualDevice implements AutoCloseable {
             } else {
                 transport.publish(new Telemetry(deviceId, clock.instant(), reading.temperature(), reading.humidity()));
                 lastReported = reading;
-                log.info("{}: sent temperature={}°C humidity={}%{}", deviceId,
-                        format(reading.temperature()), format(reading.humidity()),
-                        fault == SensorFault.NONE ? "" : " (fault " + fault + ", true " + format(truth.humidity()) + "%)");
+                log.info(
+                        "{}: sent temperature={}°C humidity={}%{}",
+                        deviceId,
+                        format(reading.temperature()),
+                        format(reading.humidity()),
+                        fault == SensorFault.NONE
+                                ? ""
+                                : " (fault " + fault + ", true " + format(truth.humidity()) + "%)");
             }
             transport.reportState(SimulationState.NAME, state());
         } catch (InterruptedException e) {
@@ -156,10 +161,13 @@ public final class VirtualDevice implements AutoCloseable {
         if (closed) {
             return;
         }
-        nextTick = scheduler.schedule(() -> {
-            tick();
-            scheduleNext(scaled(baseInterval));
-        }, delay.toMillis(), TimeUnit.MILLISECONDS);
+        nextTick = scheduler.schedule(
+                () -> {
+                    tick();
+                    scheduleNext(scaled(baseInterval));
+                },
+                delay.toMillis(),
+                TimeUnit.MILLISECONDS);
     }
 
     private Duration scaled(Duration base) {

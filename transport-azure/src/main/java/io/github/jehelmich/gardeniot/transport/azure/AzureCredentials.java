@@ -17,8 +17,7 @@ final class AzureCredentials {
         static final TokenCredential DEFAULT = new DefaultAzureCredentialBuilder().build();
     }
 
-    private AzureCredentials() {
-    }
+    private AzureCredentials() {}
 
     static TokenCredential defaultCredential() {
         return Holder.DEFAULT;

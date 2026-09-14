@@ -6,7 +6,6 @@ import io.github.jehelmich.gardeniot.telemetry.Telemetry;
 import io.github.jehelmich.gardeniot.telemetry.TelemetryCodec;
 import io.github.jehelmich.gardeniot.transport.CommandHandler;
 import io.github.jehelmich.gardeniot.transport.DeviceTransport;
-
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -31,8 +30,8 @@ public final class MqttDeviceTransport implements DeviceTransport {
 
     static MqttDeviceTransport open(MqttSettings settings, String deviceId, CommandHandler handler) throws Exception {
         MqttTopics topics = settings.topics();
-        Mqtt5AsyncClient client = MqttClients.connect(settings, "device-" + deviceId,
-                topics.status(deviceId), MqttTopics.OFFLINE);
+        Mqtt5AsyncClient client =
+                MqttClients.connect(settings, "device-" + deviceId, topics.status(deviceId), MqttTopics.OFFLINE);
         MqttDeviceTransport transport = new MqttDeviceTransport(client, topics, deviceId);
         CommandResponder responder = new CommandResponder(client, handler);
         client.subscribeWith()

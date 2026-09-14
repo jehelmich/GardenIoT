@@ -10,7 +10,6 @@ import io.micrometer.core.instrument.binder.system.ProcessorMetrics;
 import io.micrometer.core.instrument.binder.system.UptimeMetrics;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
-
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -55,13 +54,14 @@ public final class Metrics {
     /** Sets a per-device gauge, registering it on first use. */
     public void gauge(String name, String description, String deviceId, double value) {
         gauges.computeIfAbsent(name + "|" + deviceId, key -> {
-            MutableDouble holder = new MutableDouble();
-            Gauge.builder(name, holder, MutableDouble::doubleValue)
-                    .description(description)
-                    .tags(Tags.of(DEVICE_TAG, deviceId))
-                    .register(registry);
-            return holder;
-        }).set(value);
+                    MutableDouble holder = new MutableDouble();
+                    Gauge.builder(name, holder, MutableDouble::doubleValue)
+                            .description(description)
+                            .tags(Tags.of(DEVICE_TAG, deviceId))
+                            .register(registry);
+                    return holder;
+                })
+                .set(value);
     }
 
     /** Drops a device's gauges, for a plant that has been removed. */
@@ -81,9 +81,24 @@ public final class Metrics {
             value = newValue;
         }
 
-        @Override public double doubleValue() { return value; }
-        @Override public float floatValue() { return (float) value; }
-        @Override public long longValue() { return (long) value; }
-        @Override public int intValue() { return (int) value; }
+        @Override
+        public double doubleValue() {
+            return value;
+        }
+
+        @Override
+        public float floatValue() {
+            return (float) value;
+        }
+
+        @Override
+        public long longValue() {
+            return (long) value;
+        }
+
+        @Override
+        public int intValue() {
+            return (int) value;
+        }
     }
 }

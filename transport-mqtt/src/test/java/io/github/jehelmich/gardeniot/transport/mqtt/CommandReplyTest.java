@@ -1,11 +1,10 @@
 package io.github.jehelmich.gardeniot.transport.mqtt;
 
-import io.github.jehelmich.gardeniot.transport.CommandResult;
-import org.junit.jupiter.api.Test;
-
-import java.util.Map;
-
 import static org.assertj.core.api.Assertions.assertThat;
+
+import io.github.jehelmich.gardeniot.transport.CommandResult;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
 
 class CommandReplyTest {
 
@@ -22,7 +21,8 @@ class CommandReplyTest {
 
     @Test
     void carriesArbitraryPayloads() {
-        CommandResult decoded = CommandReply.decode(CommandReply.encode(CommandResult.ok(Map.of("deviceIds", java.util.List.of("a", "b")))));
+        CommandResult decoded = CommandReply.decode(
+                CommandReply.encode(CommandResult.ok(Map.of("deviceIds", java.util.List.of("a", "b")))));
 
         assertThat(decoded.payload().toString()).isEqualTo("{\"deviceIds\":[\"a\",\"b\"]}");
     }

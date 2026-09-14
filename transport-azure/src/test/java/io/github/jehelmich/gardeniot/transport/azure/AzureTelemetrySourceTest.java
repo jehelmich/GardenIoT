@@ -1,13 +1,12 @@
 package io.github.jehelmich.gardeniot.transport.azure;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.azure.messaging.eventhubs.EventData;
 import io.github.jehelmich.gardeniot.telemetry.Telemetry;
 import io.github.jehelmich.gardeniot.telemetry.TelemetryCodec;
-import org.junit.jupiter.api.Test;
-
 import java.time.Instant;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 class AzureTelemetrySourceTest {
 

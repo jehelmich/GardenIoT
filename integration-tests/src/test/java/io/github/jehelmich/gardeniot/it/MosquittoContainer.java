@@ -14,8 +14,8 @@ final class MosquittoContainer extends GenericContainer<MosquittoContainer> {
     MosquittoContainer() {
         super(DockerImageName.parse("eclipse-mosquitto:2.0.22"));
         withExposedPorts(MQTT_PORT);
-        withCopyFileToContainer(MountableFile.forHostPath("../deploy/mosquitto/mosquitto.conf"),
-                "/mosquitto/config/mosquitto.conf");
+        withCopyFileToContainer(
+                MountableFile.forHostPath("../deploy/mosquitto/mosquitto.conf"), "/mosquitto/config/mosquitto.conf");
         waitingFor(Wait.forLogMessage(".*mosquitto version .* running.*", 1));
     }
 

@@ -3,7 +3,6 @@ package io.github.jehelmich.gardeniot.transport.mqtt;
 import com.hivemq.client.mqtt.mqtt5.Mqtt5AsyncClient;
 import io.github.jehelmich.gardeniot.transport.CommandHandler;
 import io.github.jehelmich.gardeniot.transport.FleetChannel;
-
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 

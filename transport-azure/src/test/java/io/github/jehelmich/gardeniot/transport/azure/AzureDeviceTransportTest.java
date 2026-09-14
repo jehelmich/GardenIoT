@@ -1,14 +1,13 @@
 package io.github.jehelmich.gardeniot.transport.azure;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.microsoft.azure.sdk.iot.device.Message;
 import io.github.jehelmich.gardeniot.telemetry.Telemetry;
 import io.github.jehelmich.gardeniot.telemetry.TelemetryCodec;
-import org.junit.jupiter.api.Test;
-
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 class AzureDeviceTransportTest {
 
@@ -28,9 +27,11 @@ class AzureDeviceTransportTest {
 
     @Test
     void flagsHotReadingsInAnApplicationProperty() {
-        assertThat(AzureDeviceTransport.toMessage(new Telemetry("g", NOW, 30.0, 50.0)).getProperty("temperatureAlert"))
+        assertThat(AzureDeviceTransport.toMessage(new Telemetry("g", NOW, 30.0, 50.0))
+                        .getProperty("temperatureAlert"))
                 .isEqualTo("false");
-        assertThat(AzureDeviceTransport.toMessage(new Telemetry("g", NOW, 30.1, 50.0)).getProperty("temperatureAlert"))
+        assertThat(AzureDeviceTransport.toMessage(new Telemetry("g", NOW, 30.1, 50.0))
+                        .getProperty("temperatureAlert"))
                 .isEqualTo("true");
     }
 }

@@ -1,11 +1,10 @@
 package io.github.jehelmich.gardeniot.telemetry;
 
-import org.junit.jupiter.api.Test;
-
-import java.time.Instant;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+
+import java.time.Instant;
+import org.junit.jupiter.api.Test;
 
 class TelemetryCodecTest {
 
@@ -14,8 +13,9 @@ class TelemetryCodecTest {
 
     @Test
     void producesTheDocumentedWireFormat() {
-        assertThat(TelemetryCodec.toJson(READING)).isEqualTo(
-                "{\"deviceId\":\"garden-1\",\"timestamp\":\"2017-07-17T10:15:30Z\",\"temperature\":22.4,\"humidity\":31.9}");
+        assertThat(TelemetryCodec.toJson(READING))
+                .isEqualTo(
+                        "{\"deviceId\":\"garden-1\",\"timestamp\":\"2017-07-17T10:15:30Z\",\"temperature\":22.4,\"humidity\":31.9}");
     }
 
     @Test
@@ -53,8 +53,9 @@ class TelemetryCodecTest {
     @Test
     void rejectsHumidityOutOfRange() {
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> TelemetryCodec.fromJson(
-                        "{\"deviceId\":\"g\",\"timestamp\":\"2017-07-17T10:15:30Z\",\"temperature\":1,\"humidity\":120}"))
+                .isThrownBy(
+                        () -> TelemetryCodec.fromJson(
+                                "{\"deviceId\":\"g\",\"timestamp\":\"2017-07-17T10:15:30Z\",\"temperature\":1,\"humidity\":120}"))
                 .withMessageContaining("humidity");
     }
 }

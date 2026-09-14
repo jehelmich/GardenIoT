@@ -1,7 +1,6 @@
 package io.github.jehelmich.gardeniot.transport.mqtt;
 
 import io.github.jehelmich.gardeniot.config.Environment;
-
 import java.time.Duration;
 import java.util.Optional;
 
@@ -16,13 +15,14 @@ import java.util.Optional;
  * @param topicPrefix    first topic segment, so several installations can share a broker
  * @param commandTimeout how long the cloud side waits for a device to answer a command
  */
-public record MqttSettings(String host,
-                           int port,
-                           boolean tls,
-                           Optional<String> username,
-                           Optional<String> password,
-                           String topicPrefix,
-                           Duration commandTimeout) {
+public record MqttSettings(
+        String host,
+        int port,
+        boolean tls,
+        Optional<String> username,
+        Optional<String> password,
+        String topicPrefix,
+        Duration commandTimeout) {
 
     public static final String HOST = "MQTT_HOST";
     public static final String PORT = "MQTT_PORT";
@@ -36,8 +36,12 @@ public record MqttSettings(String host,
         if (port < 1 || port > 65_535) {
             throw new IllegalStateException(PORT + " must be a TCP port, was " + port);
         }
-        if (topicPrefix.isBlank() || topicPrefix.contains("/") || topicPrefix.contains("+") || topicPrefix.contains("#")) {
-            throw new IllegalStateException(TOPIC_PREFIX + " must be a single topic segment, was '" + topicPrefix + "'");
+        if (topicPrefix.isBlank()
+                || topicPrefix.contains("/")
+                || topicPrefix.contains("+")
+                || topicPrefix.contains("#")) {
+            throw new IllegalStateException(
+                    TOPIC_PREFIX + " must be a single topic segment, was '" + topicPrefix + "'");
         }
     }
 
@@ -53,7 +57,8 @@ public record MqttSettings(String host,
     }
 
     public static MqttSettings local(String host, int port) {
-        return new MqttSettings(host, port, false, Optional.empty(), Optional.empty(), "garden", Duration.ofSeconds(10));
+        return new MqttSettings(
+                host, port, false, Optional.empty(), Optional.empty(), "garden", Duration.ofSeconds(10));
     }
 
     public MqttTopics topics() {

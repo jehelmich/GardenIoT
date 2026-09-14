@@ -5,13 +5,12 @@ import com.hivemq.client.mqtt.mqtt5.message.publish.Mqtt5Publish;
 import io.github.jehelmich.gardeniot.telemetry.Telemetry;
 import io.github.jehelmich.gardeniot.telemetry.TelemetryCodec;
 import io.github.jehelmich.gardeniot.transport.TelemetrySource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Reads every device's telemetry topic.
@@ -49,10 +48,12 @@ public final class MqttTelemetrySource implements TelemetrySource {
         try {
             Telemetry telemetry = TelemetryCodec.fromJson(MqttClients.utf8(publish.getPayloadAsBytes()));
             if (topicDeviceId != null && !topicDeviceId.equals(telemetry.deviceId())) {
-                log.warn("Message on '{}' claims to be from '{}'; trusting the topic",
-                        publish.getTopic(), telemetry.deviceId());
-                telemetry = new Telemetry(topicDeviceId, telemetry.timestamp(),
-                        telemetry.temperature(), telemetry.humidity());
+                log.warn(
+                        "Message on '{}' claims to be from '{}'; trusting the topic",
+                        publish.getTopic(),
+                        telemetry.deviceId());
+                telemetry = new Telemetry(
+                        topicDeviceId, telemetry.timestamp(), telemetry.temperature(), telemetry.humidity());
             }
             return Optional.of(telemetry);
         } catch (IllegalArgumentException e) {

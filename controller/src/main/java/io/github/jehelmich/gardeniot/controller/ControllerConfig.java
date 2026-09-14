@@ -2,7 +2,6 @@ package io.github.jehelmich.gardeniot.controller;
 
 import io.github.jehelmich.gardeniot.config.Environment;
 import io.github.jehelmich.gardeniot.config.Transport;
-
 import java.time.Duration;
 
 /**

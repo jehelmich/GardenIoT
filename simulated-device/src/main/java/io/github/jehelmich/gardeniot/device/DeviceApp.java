@@ -9,14 +9,13 @@ import io.github.jehelmich.gardeniot.transport.azure.AzureDeviceSettings;
 import io.github.jehelmich.gardeniot.transport.azure.AzureDeviceTransportFactory;
 import io.github.jehelmich.gardeniot.transport.mqtt.MqttDeviceTransportFactory;
 import io.github.jehelmich.gardeniot.transport.mqtt.MqttSettings;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Entry point of the device process.
@@ -29,8 +28,7 @@ public final class DeviceApp {
 
     private static final Logger log = LoggerFactory.getLogger(DeviceApp.class);
 
-    private DeviceApp() {
-    }
+    private DeviceApp() {}
 
     public static void main(String[] args) throws Exception {
         Environment env = Environment.system();
@@ -41,7 +39,8 @@ public final class DeviceApp {
             config = DeviceConfig.fromEnvironment(env);
             switch (config.transport()) {
                 case AZURE -> {
-                    AzureDeviceTransportFactory azure = new AzureDeviceTransportFactory(AzureDeviceSettings.fromEnvironment(env));
+                    AzureDeviceTransportFactory azure =
+                            new AzureDeviceTransportFactory(AzureDeviceSettings.fromEnvironment(env));
                     transports = azure;
                     initialIds = config.deviceIds().isEmpty() ? azure.boundDeviceIds() : config.deviceIds();
                 }
@@ -63,17 +62,20 @@ public final class DeviceApp {
         DeviceFleet fleet = new DeviceFleet(config, transports, Clock.systemUTC(), new DeviceMetrics(metrics));
         Optional<FleetChannel> fleetChannel = transports.fleetChannel();
         CountDownLatch stopped = new CountDownLatch(1);
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            log.info("Shutting down");
-            ready.set(false);
-            fleetChannel.ifPresent(FleetChannel::close);
-            fleet.close();
-            transports.close();
-            if (observability != null) {
-                observability.close();
-            }
-            stopped.countDown();
-        }, "shutdown"));
+        Runtime.getRuntime()
+                .addShutdownHook(new Thread(
+                        () -> {
+                            log.info("Shutting down");
+                            ready.set(false);
+                            fleetChannel.ifPresent(FleetChannel::close);
+                            fleet.close();
+                            transports.close();
+                            if (observability != null) {
+                                observability.close();
+                            }
+                            stopped.countDown();
+                        },
+                        "shutdown"));
 
         for (String id : initialIds) {
             fleet.add(id);
@@ -83,8 +85,11 @@ public final class DeviceApp {
             log.info("Accepting fleet commands");
         }
         ready.set(true);
-        log.info("Hosting {} over {}; publishing every {}s. Press Ctrl-C to stop.",
-                fleet.deviceIds(), config.transport(), config.telemetryInterval().toSeconds());
+        log.info(
+                "Hosting {} over {}; publishing every {}s. Press Ctrl-C to stop.",
+                fleet.deviceIds(),
+                config.transport(),
+                config.telemetryInterval().toSeconds());
         stopped.await();
     }
 

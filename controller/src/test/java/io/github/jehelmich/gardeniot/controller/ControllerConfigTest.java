@@ -1,14 +1,13 @@
 package io.github.jehelmich.gardeniot.controller;
 
-import io.github.jehelmich.gardeniot.config.Environment;
-import io.github.jehelmich.gardeniot.config.Transport;
-import org.junit.jupiter.api.Test;
-
-import java.time.Duration;
-import java.util.Map;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+
+import io.github.jehelmich.gardeniot.config.Environment;
+import io.github.jehelmich.gardeniot.config.Transport;
+import java.time.Duration;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
 
 class ControllerConfigTest {
 
@@ -44,7 +43,8 @@ class ControllerConfigTest {
     @Test
     void rejectsAnUnknownTransport() {
         assertThatIllegalStateException()
-                .isThrownBy(() -> ControllerConfig.fromEnvironment(new Environment(Map.of(Transport.VARIABLE, "carrier-pigeon"))))
+                .isThrownBy(() ->
+                        ControllerConfig.fromEnvironment(new Environment(Map.of(Transport.VARIABLE, "carrier-pigeon"))))
                 .withMessageContaining("TRANSPORT");
     }
 }

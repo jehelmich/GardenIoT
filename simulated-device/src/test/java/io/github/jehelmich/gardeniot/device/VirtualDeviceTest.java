@@ -1,10 +1,9 @@
 package io.github.jehelmich.gardeniot.device;
 
-import io.github.jehelmich.gardeniot.observability.Metrics;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 
+import io.github.jehelmich.gardeniot.observability.Metrics;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -14,9 +13,9 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.IntStream;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatNoException;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class VirtualDeviceTest {
 
@@ -28,12 +27,20 @@ class VirtualDeviceTest {
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     /** Runs actions inline so their outcome is visible immediately. */
     private final Executor actions = Runnable::run;
+
     private VirtualDevice device;
 
     @BeforeEach
     void connect() throws Exception {
-        device = new VirtualDevice("basil", plant, Duration.ofHours(1), Duration.ZERO,
-                Clock.fixed(NOW, ZoneOffset.UTC), scheduler, actions, new DeviceMetrics(metrics));
+        device = new VirtualDevice(
+                "basil",
+                plant,
+                Duration.ofHours(1),
+                Duration.ZERO,
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                scheduler,
+                actions,
+                new DeviceMetrics(metrics));
         device.start(transport);
         // The first tick is scheduled immediately; wait for it so tests start from a known count.
         IntStream.range(0, 100).takeWhile(i -> transport.published.isEmpty()).forEach(i -> sleep(10));
@@ -139,5 +146,4 @@ class VirtualDeviceTest {
             Thread.currentThread().interrupt();
         }
     }
-
 }

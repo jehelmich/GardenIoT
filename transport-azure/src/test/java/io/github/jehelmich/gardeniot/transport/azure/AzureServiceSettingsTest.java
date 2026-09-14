@@ -1,12 +1,11 @@
 package io.github.jehelmich.gardeniot.transport.azure;
 
-import io.github.jehelmich.gardeniot.config.Environment;
-import org.junit.jupiter.api.Test;
-
-import java.util.Map;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+
+import io.github.jehelmich.gardeniot.config.Environment;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
 
 class AzureServiceSettingsTest {
 
@@ -25,7 +24,8 @@ class AzureServiceSettingsTest {
     @Test
     void fallsBackToConnectionStrings() {
         AzureServiceSettings settings = AzureServiceSettings.fromEnvironment(new Environment(Map.of(
-                AzureServiceSettings.SERVICE_CONNECTION_STRING, "HostName=h;SharedAccessKeyName=service;SharedAccessKey=k",
+                AzureServiceSettings.SERVICE_CONNECTION_STRING,
+                        "HostName=h;SharedAccessKeyName=service;SharedAccessKey=k",
                 AzureServiceSettings.EVENTHUB_CONNECTION_STRING, "Endpoint=sb://h/;EntityPath=hub",
                 AzureServiceSettings.CONSUMER_GROUP, "controller")));
 

@@ -1,12 +1,11 @@
 package io.github.jehelmich.gardeniot.config;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 import java.time.Duration;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+import org.junit.jupiter.api.Test;
 
 class EnvironmentTest {
 
@@ -20,8 +19,7 @@ class EnvironmentTest {
         assertThatIllegalStateException()
                 .isThrownBy(() -> new Environment(Map.of()).required("KEY"))
                 .withMessage("Missing required environment variable KEY");
-        assertThatIllegalStateException()
-                .isThrownBy(() -> new Environment(Map.of("KEY", "   ")).required("KEY"));
+        assertThatIllegalStateException().isThrownBy(() -> new Environment(Map.of("KEY", "   ")).required("KEY"));
     }
 
     @Test

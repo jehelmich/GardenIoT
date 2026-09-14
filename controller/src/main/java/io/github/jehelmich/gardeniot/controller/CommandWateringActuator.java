@@ -25,8 +25,8 @@ public final class CommandWateringActuator implements WateringActuator {
         log.info("{}: sending '{}'", deviceId, COMMAND);
         CommandResult result = commands.send(deviceId, COMMAND, null);
         if (!result.isSuccess()) {
-            throw new CommandException("Device " + deviceId + " answered '" + COMMAND + "' with "
-                    + result.status() + ": " + Json.stringify(result.payload()));
+            throw new CommandException("Device " + deviceId + " answered '" + COMMAND + "' with " + result.status()
+                    + ": " + Json.stringify(result.payload()));
         }
         log.info("{}: answered {} {}", deviceId, result.status(), Json.stringify(result.payload()));
     }

@@ -16,8 +16,8 @@ public enum Transport {
         try {
             return valueOf(value.toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new IllegalStateException(VARIABLE + " must be one of " + Arrays.toString(values())
-                    + ", was '" + value + "'");
+            throw new IllegalStateException(
+                    VARIABLE + " must be one of " + Arrays.toString(values()) + ", was '" + value + "'");
         }
     }
 }

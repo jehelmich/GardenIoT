@@ -27,7 +27,9 @@ public final class TelemetryProcessor {
 
     public void onTelemetry(Telemetry telemetry) {
         metrics.telemetryReceived(telemetry);
-        log.info("{}: temperature={}°C humidity={}%", telemetry.deviceId(),
+        log.info(
+                "{}: temperature={}°C humidity={}%",
+                telemetry.deviceId(),
                 String.format("%.1f", telemetry.temperature()),
                 String.format("%.1f", telemetry.humidity()));
 

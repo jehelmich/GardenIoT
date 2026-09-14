@@ -1,16 +1,15 @@
 package io.github.jehelmich.gardeniot.controller;
 
-import io.github.jehelmich.gardeniot.transport.CommandException;
-import io.github.jehelmich.gardeniot.transport.CommandResult;
-import org.junit.jupiter.api.Test;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatNoException;
+
+import io.github.jehelmich.gardeniot.transport.CommandException;
+import io.github.jehelmich.gardeniot.transport.CommandResult;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
 
 class CommandWateringActuatorTest {
 
@@ -30,16 +29,16 @@ class CommandWateringActuatorTest {
 
     @Test
     void acceptsAnySuccessStatus() {
-        CommandWateringActuator actuator = new CommandWateringActuator(
-                (deviceId, command, payload) -> CommandResult.ok(Map.of()));
+        CommandWateringActuator actuator =
+                new CommandWateringActuator((deviceId, command, payload) -> CommandResult.ok(Map.of()));
 
         assertThatNoException().isThrownBy(() -> actuator.water("basil"));
     }
 
     @Test
     void reportsARejectedCommand() {
-        CommandWateringActuator actuator = new CommandWateringActuator(
-                (deviceId, command, payload) -> CommandResult.notFound(command));
+        CommandWateringActuator actuator =
+                new CommandWateringActuator((deviceId, command, payload) -> CommandResult.notFound(command));
 
         assertThatExceptionOfType(CommandException.class)
                 .isThrownBy(() -> actuator.water("basil"))

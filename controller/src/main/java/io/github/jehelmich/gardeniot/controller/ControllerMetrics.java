@@ -18,13 +18,25 @@ public final class ControllerMetrics {
     }
 
     void telemetryReceived(Telemetry telemetry) {
-        metrics.counter(TELEMETRY_TOTAL, "Readings received", Metrics.DEVICE_TAG, telemetry.deviceId()).increment();
-        metrics.gauge(HUMIDITY, "Soil humidity as last reported by the device", telemetry.deviceId(), telemetry.humidity());
-        metrics.gauge(TEMPERATURE, "Air temperature as last reported by the device", telemetry.deviceId(), telemetry.temperature());
+        metrics.counter(TELEMETRY_TOTAL, "Readings received", Metrics.DEVICE_TAG, telemetry.deviceId())
+                .increment();
+        metrics.gauge(
+                HUMIDITY, "Soil humidity as last reported by the device", telemetry.deviceId(), telemetry.humidity());
+        metrics.gauge(
+                TEMPERATURE,
+                "Air temperature as last reported by the device",
+                telemetry.deviceId(),
+                telemetry.temperature());
     }
 
     void wateringCommand(String deviceId, String outcome) {
-        metrics.counter(WATERING_COMMANDS_TOTAL, "Watering commands by outcome",
-                Metrics.DEVICE_TAG, deviceId, "outcome", outcome).increment();
+        metrics.counter(
+                        WATERING_COMMANDS_TOTAL,
+                        "Watering commands by outcome",
+                        Metrics.DEVICE_TAG,
+                        deviceId,
+                        "outcome",
+                        outcome)
+                .increment();
     }
 }

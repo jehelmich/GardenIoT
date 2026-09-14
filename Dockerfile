@@ -8,7 +8,9 @@
 
 ARG JAVA_VERSION=21
 
-FROM eclipse-temurin:${JAVA_VERSION}-jdk-alpine AS build
+# The build stage runs on the builder's own architecture; jars are portable, so only the small
+# runtime stage is built per target platform. That keeps multi-arch builds off QEMU.
+FROM --platform=$BUILDPLATFORM eclipse-temurin:${JAVA_VERSION}-jdk-alpine AS build
 ARG MODULE
 WORKDIR /src
 COPY . .

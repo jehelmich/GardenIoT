@@ -8,10 +8,14 @@ updates:
       azure:
         patterns: ["com.azure*", "com.microsoft.azure*"]
       maven-plugins:
-        patterns: ["org.apache.maven.plugins:*"]
+        patterns: ["org.apache.maven.plugins:*", "org.jacoco:*", "com.diffplug.spotless:*"]
       test:
-        patterns: ["org.junit*", "org.assertj*"]
+        patterns: ["org.junit*", "org.assertj*", "org.testcontainers*", "org.awaitility*"]
   - package-ecosystem: github-actions
     directory: /
+    schedule:
+      interval: monthly
+  - package-ecosystem: docker
+    directories: ["/", "/deploy/helm/gardeniot"]
     schedule:
       interval: monthly

@@ -1,7 +1,6 @@
 package io.github.jehelmich.gardeniot.transport;
 
 import io.github.jehelmich.gardeniot.telemetry.Telemetry;
-
 import java.util.function.Consumer;
 
 /** Cloud side of the telemetry stream: readings from every device, as they arrive. */

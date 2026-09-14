@@ -4,10 +4,9 @@ import com.hivemq.client.mqtt.mqtt5.Mqtt5AsyncClient;
 import com.hivemq.client.mqtt.mqtt5.message.publish.Mqtt5Publish;
 import io.github.jehelmich.gardeniot.transport.CommandHandler;
 import io.github.jehelmich.gardeniot.transport.CommandResult;
+import java.nio.ByteBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.nio.ByteBuffer;
 
 /**
  * Serves one side of MQTT 5 request/response: runs the handler for each request and publishes

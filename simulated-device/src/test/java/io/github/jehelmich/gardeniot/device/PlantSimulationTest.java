@@ -1,12 +1,11 @@
 package io.github.jehelmich.gardeniot.device;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import java.util.Random;
 import java.util.stream.IntStream;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import org.junit.jupiter.api.Test;
 
 class PlantSimulationTest {
 
@@ -66,7 +65,6 @@ class PlantSimulationTest {
 
     @Test
     void rejectsAnImpossibleMinimumHumidity() {
-        assertThatIllegalArgumentException()
-                .isThrownBy(() -> new PlantSimulation(15.0, 101.0, new Random(SEED)));
+        assertThatIllegalArgumentException().isThrownBy(() -> new PlantSimulation(15.0, 101.0, new Random(SEED)));
     }
 }

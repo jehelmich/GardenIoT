@@ -1,14 +1,13 @@
 package io.github.jehelmich.gardeniot.device;
 
-import io.github.jehelmich.gardeniot.config.Environment;
-import io.github.jehelmich.gardeniot.config.Transport;
-import org.junit.jupiter.api.Test;
-
-import java.time.Duration;
-import java.util.Map;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+
+import io.github.jehelmich.gardeniot.config.Environment;
+import io.github.jehelmich.gardeniot.config.Transport;
+import java.time.Duration;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
 
 class DeviceConfigTest {
 

@@ -4,7 +4,6 @@ import com.microsoft.azure.sdk.iot.device.DeviceClient;
 import io.github.jehelmich.gardeniot.transport.CommandHandler;
 import io.github.jehelmich.gardeniot.transport.DeviceTransport;
 import io.github.jehelmich.gardeniot.transport.DeviceTransportFactory;
-
 import java.util.List;
 
 /**
@@ -30,8 +29,8 @@ public final class AzureDeviceTransportFactory implements DeviceTransportFactory
     @Override
     public DeviceTransport connect(String deviceId, CommandHandler handler) throws Exception {
         if (!settings.deviceId().equals(deviceId)) {
-            throw new IllegalArgumentException("The connection string authenticates '"
-                    + settings.deviceId() + "', not '" + deviceId + "'");
+            throw new IllegalArgumentException(
+                    "The connection string authenticates '" + settings.deviceId() + "', not '" + deviceId + "'");
         }
         DeviceClient client = new DeviceClient(settings.connectionString(), settings.protocol());
         return AzureDeviceTransport.open(client, deviceId, handler);

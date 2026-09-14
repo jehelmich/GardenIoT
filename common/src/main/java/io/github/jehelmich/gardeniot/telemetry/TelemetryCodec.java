@@ -6,7 +6,6 @@ import com.google.gson.JsonParseException;
 import com.google.gson.TypeAdapter;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonWriter;
-
 import java.io.IOException;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
@@ -27,8 +26,7 @@ public final class TelemetryCodec {
             .disableHtmlEscaping()
             .create();
 
-    private TelemetryCodec() {
-    }
+    private TelemetryCodec() {}
 
     public static String toJson(Telemetry telemetry) {
         return GSON.toJson(telemetry);

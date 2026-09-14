@@ -15,8 +15,7 @@ import java.util.Random;
 public final class PlantSimulation {
 
     /** A single sample of the simulated sensors. */
-    public record Reading(double temperature, double humidity) {
-    }
+    public record Reading(double temperature, double humidity) {}
 
     private static final double INITIAL_TEMPERATURE = 22.0;
     private static final double INITIAL_HUMIDITY = 26.0;

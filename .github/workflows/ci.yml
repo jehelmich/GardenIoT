@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/gardeniot
+
 jobs:
   build:
     name: Build and test
@@ -21,13 +25,127 @@ jobs:
           java-version: 21
           cache: maven
 
-      - name: Build
+      - name: Build, unit and integration tests
         run: ./mvnw --batch-mode --no-transfer-progress verify
 
-      - name: Publish test results
+      - name: Coverage summary
+        if: always()
+        run: |
+          {
+            echo "## Test coverage (JaCoCo, line)"
+            echo
+            echo "| Module | Covered | Missed | Line coverage |"
+            echo "|---|---:|---:|---:|"
+            for csv in */target/site/jacoco/jacoco.csv; do
+              [ -f "$csv" ] || continue
+              module=$(echo "$csv" | cut -d/ -f1)
+              awk -F, -v m="$module" 'NR>1 {c+=$9; x+=$8} END {if (c+x>0) printf "| %s | %d | %d | %.1f%% |\n", m, c, x, 100*c/(c+x)}' "$csv"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep test and coverage reports
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: surefire-reports
-          path: '**/target/surefire-reports/*.xml'
+          name: reports
+          path: |
+            **/target/surefire-reports/*.xml
+            **/target/failsafe-reports/*.xml
+            **/target/site/jacoco/
           if-no-files-found: ignore
+
+      - name: Keep the jars for the image job
+        uses: actions/upload-artifact@v7
+        with:
+          name: jars
+          path: |
+            controller/target/controller.jar
+            simulated-device/target/simulated-device.jar
+          if-no-files-found: error
+
+  images:
+    name: Container image (${{ matrix.module }})
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [controller, simulated-device]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image tags
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_PREFIX }}-${{ matrix.module }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=ref,event=branch
+            type=ref,event=pr
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build for scanning
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          build-args: MODULE=${{ matrix.module }}
+          load: true
+          tags: ${{ env.IMAGE_PREFIX }}-${{ matrix.module }}:scan
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan the image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_PREFIX }}-${{ matrix.module }}:scan
+          format: sarif
+          output: trivy-${{ matrix.module }}.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Upload scan results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-${{ matrix.module }}.sarif
+          category: trivy-${{ matrix.module }}
+
+      - name: Build and push (multi-arch)
+        if: github.event_name != 'pull_request'
+        id: push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          build-args: MODULE=${{ matrix.module }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Sign the image (keyless, Sigstore)
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v4
+      - if: github.event_name != 'pull_request'
+        run: cosign sign --yes "${IMAGE}@${DIGEST}"
+        env:
+          IMAGE: ${{ env.IMAGE_PREFIX }}-${{ matrix.module }}
+          DIGEST: ${{ steps.push.outputs.digest }}

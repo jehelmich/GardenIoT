@@ -4,7 +4,6 @@ import io.github.jehelmich.gardeniot.transport.CommandHandler;
 import io.github.jehelmich.gardeniot.transport.DeviceTransport;
 import io.github.jehelmich.gardeniot.transport.DeviceTransportFactory;
 import io.github.jehelmich.gardeniot.transport.FleetChannel;
-
 import java.util.Optional;
 
 /** Connects devices to an MQTT broker; any device id is welcome, no registration needed. */

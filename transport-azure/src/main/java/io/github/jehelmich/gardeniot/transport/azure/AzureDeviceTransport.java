@@ -12,11 +12,10 @@ import io.github.jehelmich.gardeniot.telemetry.TelemetryCodec;
 import io.github.jehelmich.gardeniot.transport.CommandHandler;
 import io.github.jehelmich.gardeniot.transport.CommandResult;
 import io.github.jehelmich.gardeniot.transport.DeviceTransport;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.Map;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A device's connection to IoT Hub: telemetry as device-to-cloud messages, commands as direct
@@ -39,13 +38,15 @@ public final class AzureDeviceTransport implements DeviceTransport {
 
     static AzureDeviceTransport open(DeviceClient client, String deviceId, CommandHandler handler)
             throws IotHubClientException, InterruptedException {
-        client.setConnectionStatusChangeCallback(change -> log.info("{}: connection {} ({})",
-                deviceId, change.getNewStatus(), change.getNewStatusReason()), null);
+        client.setConnectionStatusChangeCallback(
+                change -> log.info(
+                        "{}: connection {} ({})", deviceId, change.getNewStatus(), change.getNewStatusReason()),
+                null);
         // Retries with exponential back-off until the hub is reachable, so a device that boots
         // before its network is up still comes online.
         client.open(true);
-        client.subscribeToMethods((method, payload, context) -> toDirectMethodResponse(
-                handler.handle(method, toJson(payload))), null);
+        client.subscribeToMethods(
+                (method, payload, context) -> toDirectMethodResponse(handler.handle(method, toJson(payload))), null);
         return new AzureDeviceTransport(client, deviceId);
     }
 
@@ -57,7 +58,8 @@ public final class AzureDeviceTransport implements DeviceTransport {
     @Override
     public void reportState(String name, Object value) throws IotHubClientException, InterruptedException {
         // The twin holds JSON; pass Gson's tree so nested objects survive the SDK's own serialiser.
-        client.updateReportedProperties(new TwinCollection(Map.of(name, Json.gson().toJsonTree(value))));
+        client.updateReportedProperties(
+                new TwinCollection(Map.of(name, Json.gson().toJsonTree(value))));
     }
 
     @Override
@@ -70,8 +72,8 @@ public final class AzureDeviceTransport implements DeviceTransport {
         message.setMessageId(UUID.randomUUID().toString());
         message.setContentType("application/json");
         message.setContentEncoding("utf-8");
-        message.setProperty("temperatureAlert",
-                Boolean.toString(telemetry.temperature() > TEMPERATURE_ALERT_THRESHOLD));
+        message.setProperty(
+                "temperatureAlert", Boolean.toString(telemetry.temperature() > TEMPERATURE_ALERT_THRESHOLD));
         return message;
     }
 

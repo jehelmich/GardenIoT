@@ -1,13 +1,12 @@
 package io.github.jehelmich.gardeniot.transport.mqtt;
 
-import io.github.jehelmich.gardeniot.config.Environment;
-import org.junit.jupiter.api.Test;
-
-import java.time.Duration;
-import java.util.Map;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+
+import io.github.jehelmich.gardeniot.config.Environment;
+import java.time.Duration;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
 
 class MqttSettingsTest {
 
@@ -26,9 +25,20 @@ class MqttSettingsTest {
     @Test
     void readsEverySetting() {
         MqttSettings settings = MqttSettings.fromEnvironment(new Environment(Map.of(
-                MqttSettings.HOST, "broker", MqttSettings.PORT, "8883", MqttSettings.TLS, "true",
-                MqttSettings.USERNAME, "u", MqttSettings.PASSWORD, "p",
-                MqttSettings.TOPIC_PREFIX, "greenhouse", MqttSettings.COMMAND_TIMEOUT, "3")));
+                MqttSettings.HOST,
+                "broker",
+                MqttSettings.PORT,
+                "8883",
+                MqttSettings.TLS,
+                "true",
+                MqttSettings.USERNAME,
+                "u",
+                MqttSettings.PASSWORD,
+                "p",
+                MqttSettings.TOPIC_PREFIX,
+                "greenhouse",
+                MqttSettings.COMMAND_TIMEOUT,
+                "3")));
 
         assertThat(settings.host()).isEqualTo("broker");
         assertThat(settings.port()).isEqualTo(8883);
@@ -41,11 +51,13 @@ class MqttSettingsTest {
 
     @Test
     void rejectsNonsense() {
-        assertThatIllegalStateException().isThrownBy(() -> MqttSettings.fromEnvironment(
-                new Environment(Map.of(MqttSettings.PORT, "70000"))));
-        assertThatIllegalStateException().isThrownBy(() -> MqttSettings.fromEnvironment(
-                new Environment(Map.of(MqttSettings.TOPIC_PREFIX, "a/b"))));
-        assertThatIllegalStateException().isThrownBy(() -> MqttSettings.fromEnvironment(
-                new Environment(Map.of(MqttSettings.TOPIC_PREFIX, "+"))));
+        assertThatIllegalStateException()
+                .isThrownBy(() -> MqttSettings.fromEnvironment(new Environment(Map.of(MqttSettings.PORT, "70000"))));
+        assertThatIllegalStateException()
+                .isThrownBy(
+                        () -> MqttSettings.fromEnvironment(new Environment(Map.of(MqttSettings.TOPIC_PREFIX, "a/b"))));
+        assertThatIllegalStateException()
+                .isThrownBy(
+                        () -> MqttSettings.fromEnvironment(new Environment(Map.of(MqttSettings.TOPIC_PREFIX, "+"))));
     }
 }

@@ -5,11 +5,10 @@ import com.google.gson.JsonObject;
 import io.github.jehelmich.gardeniot.telemetry.Json;
 import io.github.jehelmich.gardeniot.transport.CommandHandler;
 import io.github.jehelmich.gardeniot.transport.CommandResult;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.Arrays;
 import java.util.Locale;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The commands a plant answers to.
@@ -72,7 +71,9 @@ final class DeviceCommands implements CommandHandler {
 
     private CommandResult setSpeed(JsonElement payload) {
         JsonElement factor = field(payload, "factor");
-        if (factor == null || !factor.isJsonPrimitive() || !factor.getAsJsonPrimitive().isNumber()) {
+        if (factor == null
+                || !factor.isJsonPrimitive()
+                || !factor.getAsJsonPrimitive().isNumber()) {
             return CommandResult.badRequest("Expected {\"factor\": <number>}");
         }
         double speed = factor.getAsDouble();
@@ -86,7 +87,8 @@ final class DeviceCommands implements CommandHandler {
     private CommandResult fault(JsonElement payload) {
         JsonElement type = field(payload, "type");
         if (type == null || !type.isJsonPrimitive()) {
-            return CommandResult.badRequest("Expected {\"type\": one of " + Arrays.toString(SensorFault.values()) + "}");
+            return CommandResult.badRequest(
+                    "Expected {\"type\": one of " + Arrays.toString(SensorFault.values()) + "}");
         }
         try {
             device.setFault(SensorFault.valueOf(type.getAsString().toUpperCase(Locale.ROOT)));

@@ -6,9 +6,6 @@ import io.github.jehelmich.gardeniot.telemetry.Json;
 import io.github.jehelmich.gardeniot.transport.CommandException;
 import io.github.jehelmich.gardeniot.transport.CommandResult;
 import io.github.jehelmich.gardeniot.transport.DeviceCommandSender;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.UUID;
@@ -17,6 +14,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Sends commands as MQTT 5 requests and waits for the reply.
@@ -82,8 +81,10 @@ public final class MqttCommandSender implements DeviceCommandSender, AutoCloseab
             throw new CommandException("No answer to '" + command + "' on " + topic + " within "
                     + settings.commandTimeout().toSeconds() + "s");
         } catch (ExecutionException e) {
-            throw new CommandException("Could not send '" + command + "' to " + topic + ": "
-                    + e.getCause().getMessage(), e.getCause());
+            throw new CommandException(
+                    "Could not send '" + command + "' to " + topic + ": "
+                            + e.getCause().getMessage(),
+                    e.getCause());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new CommandException("Interrupted while waiting for '" + command + "'", e);
@@ -93,9 +94,8 @@ public final class MqttCommandSender implements DeviceCommandSender, AutoCloseab
     }
 
     private void onReply(Mqtt5Publish publish) {
-        String correlationId = publish.getCorrelationData()
-                .map(MqttCommandSender::utf8)
-                .orElse(null);
+        String correlationId =
+                publish.getCorrelationData().map(MqttCommandSender::utf8).orElse(null);
         CompletableFuture<CommandResult> reply = correlationId == null ? null : pending.get(correlationId);
         if (reply == null) {
             log.debug("Dropping reply with unknown correlation data {}", correlationId);

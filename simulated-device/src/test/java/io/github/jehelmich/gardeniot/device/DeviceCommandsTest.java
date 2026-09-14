@@ -1,18 +1,17 @@
 package io.github.jehelmich.gardeniot.device;
 
-import io.github.jehelmich.gardeniot.transport.CommandResult;
-import io.github.jehelmich.gardeniot.observability.Metrics;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.jehelmich.gardeniot.observability.Metrics;
+import io.github.jehelmich.gardeniot.transport.CommandResult;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class DeviceCommandsTest {
 
@@ -22,8 +21,15 @@ class DeviceCommandsTest {
 
     @BeforeEach
     void connect() throws Exception {
-        device = new VirtualDevice("basil", new PlantSimulation(15.0, 15.0, new Random(1L)),
-                Duration.ofHours(1), Duration.ZERO, Clock.systemUTC(), scheduler, Runnable::run, new DeviceMetrics(new Metrics()));
+        device = new VirtualDevice(
+                "basil",
+                new PlantSimulation(15.0, 15.0, new Random(1L)),
+                Duration.ofHours(1),
+                Duration.ZERO,
+                Clock.systemUTC(),
+                scheduler,
+                Runnable::run,
+                new DeviceMetrics(new Metrics()));
         device.start(transport);
     }
 
@@ -51,22 +57,31 @@ class DeviceCommandsTest {
 
     @Test
     void setSpeedValidatesTheFactor() {
-        assertThat(transport.handler.handle("setSpeed", "{\"factor\": 10}").status()).isEqualTo(200);
+        assertThat(transport.handler.handle("setSpeed", "{\"factor\": 10}").status())
+                .isEqualTo(200);
         assertThat(device.state().speed()).isEqualTo(10.0);
 
-        assertThat(transport.handler.handle("setSpeed", "{\"factor\": 0}").status()).isEqualTo(400);
-        assertThat(transport.handler.handle("setSpeed", "{\"factor\": \"fast\"}").status()).isEqualTo(400);
+        assertThat(transport.handler.handle("setSpeed", "{\"factor\": 0}").status())
+                .isEqualTo(400);
+        assertThat(transport
+                        .handler
+                        .handle("setSpeed", "{\"factor\": \"fast\"}")
+                        .status())
+                .isEqualTo(400);
         assertThat(transport.handler.handle("setSpeed", null).status()).isEqualTo(400);
         assertThat(device.state().speed()).isEqualTo(10.0);
     }
 
     @Test
     void faultSwitchesTheSensorModel() {
-        assertThat(transport.handler.handle("fault", "{\"type\": \"stuck\"}").status()).isEqualTo(200);
+        assertThat(transport.handler.handle("fault", "{\"type\": \"stuck\"}").status())
+                .isEqualTo(200);
         assertThat(device.state().fault()).isEqualTo(SensorFault.STUCK);
 
-        assertThat(transport.handler.handle("fault", "{\"type\": \"broken\"}").status()).isEqualTo(400);
-        assertThat(transport.handler.handle("fault", "{\"type\": \"none\"}").status()).isEqualTo(200);
+        assertThat(transport.handler.handle("fault", "{\"type\": \"broken\"}").status())
+                .isEqualTo(400);
+        assertThat(transport.handler.handle("fault", "{\"type\": \"none\"}").status())
+                .isEqualTo(200);
         assertThat(device.state().fault()).isEqualTo(SensorFault.NONE);
     }
 

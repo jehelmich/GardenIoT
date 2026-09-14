@@ -31,16 +31,19 @@ public final class DeviceMetrics {
         metrics.gauge(FAULT, "Sensor fault: 0 none, 1 stuck, 2 over-reading, 3 silent", deviceId, fault.ordinal());
         if (reported != null) {
             metrics.gauge(REPORTED_HUMIDITY, "Soil humidity as the sensor reported it", deviceId, reported.humidity());
-            metrics.counter(TELEMETRY_SENT_TOTAL, "Readings published", Metrics.DEVICE_TAG, deviceId).increment();
+            metrics.counter(TELEMETRY_SENT_TOTAL, "Readings published", Metrics.DEVICE_TAG, deviceId)
+                    .increment();
         }
     }
 
     void watered(String deviceId) {
-        metrics.counter(WATERINGS_TOTAL, "Times the pump ran", Metrics.DEVICE_TAG, deviceId).increment();
+        metrics.counter(WATERINGS_TOTAL, "Times the pump ran", Metrics.DEVICE_TAG, deviceId)
+                .increment();
     }
 
     void command(String deviceId, String command) {
-        metrics.counter(COMMANDS_TOTAL, "Commands received", Metrics.DEVICE_TAG, deviceId, "command", command).increment();
+        metrics.counter(COMMANDS_TOTAL, "Commands received", Metrics.DEVICE_TAG, deviceId, "command", command)
+                .increment();
     }
 
     void forget(String deviceId) {

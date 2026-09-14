@@ -1,13 +1,12 @@
 package io.github.jehelmich.gardeniot.transport.azure;
 
-import com.microsoft.azure.sdk.iot.device.IotHubClientProtocol;
-import io.github.jehelmich.gardeniot.config.Environment;
-import org.junit.jupiter.api.Test;
-
-import java.util.Map;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+
+import com.microsoft.azure.sdk.iot.device.IotHubClientProtocol;
+import io.github.jehelmich.gardeniot.config.Environment;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
 
 class AzureDeviceSettingsTest {
 
@@ -41,13 +40,15 @@ class AzureDeviceSettingsTest {
     @Test
     void acceptsTheOtherProtocolsCaseInsensitively() {
         AzureDeviceSettings settings = AzureDeviceSettings.fromEnvironment(new Environment(Map.of(
-                AzureDeviceSettings.CONNECTION_STRING, CONNECTION_STRING,
-                AzureDeviceSettings.PROTOCOL, "mqtt_ws")));
+                AzureDeviceSettings.CONNECTION_STRING, CONNECTION_STRING, AzureDeviceSettings.PROTOCOL, "mqtt_ws")));
 
         assertThat(settings.protocol()).isEqualTo(IotHubClientProtocol.MQTT_WS);
-        assertThatIllegalStateException().isThrownBy(() -> AzureDeviceSettings.fromEnvironment(new Environment(Map.of(
-                AzureDeviceSettings.CONNECTION_STRING, CONNECTION_STRING,
-                AzureDeviceSettings.PROTOCOL, "smoke-signals"))));
+        assertThatIllegalStateException()
+                .isThrownBy(() -> AzureDeviceSettings.fromEnvironment(new Environment(Map.of(
+                        AzureDeviceSettings.CONNECTION_STRING,
+                        CONNECTION_STRING,
+                        AzureDeviceSettings.PROTOCOL,
+                        "smoke-signals"))));
     }
 
     @Test

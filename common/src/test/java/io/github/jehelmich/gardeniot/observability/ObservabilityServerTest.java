@@ -1,8 +1,6 @@
 package io.github.jehelmich.gardeniot.observability;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
 import java.net.URI;
@@ -10,8 +8,9 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class ObservabilityServerTest {
 
@@ -65,8 +64,10 @@ class ObservabilityServerTest {
     }
 
     private HttpResponse<String> get(String path) throws Exception {
-        return HttpClient.newHttpClient().send(
-                HttpRequest.newBuilder(URI.create("http://localhost:" + server.port() + path)).build(),
-                HttpResponse.BodyHandlers.ofString());
+        return HttpClient.newHttpClient()
+                .send(
+                        HttpRequest.newBuilder(URI.create("http://localhost:" + server.port() + path))
+                                .build(),
+                        HttpResponse.BodyHandlers.ofString());
     }
 }

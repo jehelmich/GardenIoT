@@ -6,12 +6,11 @@ import com.azure.messaging.eventhubs.EventHubConsumerAsyncClient;
 import io.github.jehelmich.gardeniot.telemetry.Telemetry;
 import io.github.jehelmich.gardeniot.telemetry.TelemetryCodec;
 import io.github.jehelmich.gardeniot.transport.TelemetrySource;
+import java.util.Optional;
+import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.Disposable;
-
-import java.util.Optional;
-import java.util.function.Consumer;
 
 /**
  * Reads telemetry from the hub's built-in Event Hub-compatible endpoint.
@@ -36,8 +35,10 @@ public final class AzureTelemetrySource implements TelemetrySource {
     public AzureTelemetrySource(AzureServiceSettings settings) {
         EventHubClientBuilder builder = new EventHubClientBuilder().consumerGroup(settings.consumerGroup());
         if (settings.usesIdentityForEventHub()) {
-            builder.credential(settings.eventHubNamespace().orElseThrow(),
-                    settings.eventHubName().orElseThrow(), settings.credential());
+            builder.credential(
+                    settings.eventHubNamespace().orElseThrow(),
+                    settings.eventHubName().orElseThrow(),
+                    settings.credential());
         } else {
             builder.connectionString(settings.eventHubConnectionString().orElseThrow());
         }
@@ -47,9 +48,8 @@ public final class AzureTelemetrySource implements TelemetrySource {
     @Override
     public void start(Consumer<Telemetry> onTelemetry, Consumer<Throwable> onFailure) {
         log.info("Reading '{}' on consumer group '{}'", consumer.getEventHubName(), consumer.getConsumerGroup());
-        subscription = consumer.receive(false).subscribe(
-                event -> decode(event.getData()).ifPresent(onTelemetry),
-                onFailure::accept);
+        subscription = consumer.receive(false)
+                .subscribe(event -> decode(event.getData()).ifPresent(onTelemetry), onFailure::accept);
     }
 
     static Optional<Telemetry> decode(EventData event) {
@@ -57,10 +57,12 @@ public final class AzureTelemetrySource implements TelemetrySource {
             Telemetry telemetry = TelemetryCodec.fromJson(event.getBodyAsString());
             Object hubDeviceId = event.getSystemProperties().get(DEVICE_ID_PROPERTY);
             if (hubDeviceId != null && !hubDeviceId.toString().equals(telemetry.deviceId())) {
-                log.warn("Message from '{}' claims to be from '{}'; trusting the hub",
-                        hubDeviceId, telemetry.deviceId());
-                telemetry = new Telemetry(hubDeviceId.toString(), telemetry.timestamp(),
-                        telemetry.temperature(), telemetry.humidity());
+                log.warn(
+                        "Message from '{}' claims to be from '{}'; trusting the hub",
+                        hubDeviceId,
+                        telemetry.deviceId());
+                telemetry = new Telemetry(
+                        hubDeviceId.toString(), telemetry.timestamp(), telemetry.temperature(), telemetry.humidity());
             }
             return Optional.of(telemetry);
         } catch (IllegalArgumentException e) {

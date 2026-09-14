@@ -11,13 +11,12 @@ import io.github.jehelmich.gardeniot.transport.azure.AzureTelemetrySource;
 import io.github.jehelmich.gardeniot.transport.mqtt.MqttCommandSender;
 import io.github.jehelmich.gardeniot.transport.mqtt.MqttSettings;
 import io.github.jehelmich.gardeniot.transport.mqtt.MqttTelemetrySource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.time.Clock;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Entry point of the cloud-side controller.
@@ -30,8 +29,7 @@ public final class ControllerApp {
 
     private static final Logger log = LoggerFactory.getLogger(ControllerApp.class);
 
-    private ControllerApp() {
-    }
+    private ControllerApp() {}
 
     public static void main(String[] args) throws Exception {
         Environment env = Environment.system();
@@ -46,7 +44,7 @@ public final class ControllerApp {
                     AzureServiceSettings azure = AzureServiceSettings.fromEnvironment(env);
                     source = new AzureTelemetrySource(azure);
                     commands = new AzureCommandSender(azure);
-                    commandsResource = () -> { };
+                    commandsResource = () -> {};
                 }
                 case MQTT -> {
                     MqttSettings mqtt = MqttSettings.fromEnvironment(env);
@@ -66,9 +64,10 @@ public final class ControllerApp {
         Metrics metrics = new Metrics();
         AtomicBoolean ready = new AtomicBoolean();
         ObservabilityServer observability = ObservabilityServer.start(env, metrics, ready::get);
-        WateringPolicy policy = new WateringPolicy(config.humidityThreshold(), config.wateringCooldown(), Clock.systemUTC());
-        TelemetryProcessor processor = new TelemetryProcessor(policy, new CommandWateringActuator(commands),
-                new ControllerMetrics(metrics));
+        WateringPolicy policy =
+                new WateringPolicy(config.humidityThreshold(), config.wateringCooldown(), Clock.systemUTC());
+        TelemetryProcessor processor =
+                new TelemetryProcessor(policy, new CommandWateringActuator(commands), new ControllerMetrics(metrics));
 
         CountDownLatch stopped = new CountDownLatch(1);
         AtomicInteger exitCode = new AtomicInteger(0);
@@ -100,7 +99,8 @@ public final class ControllerApp {
             stopped.countDown();
         });
         ready.set(true);
-        log.info("Watching telemetry over {}; watering below {}% humidity. Press Ctrl-C to stop.",
+        log.info(
+                "Watching telemetry over {}; watering below {}% humidity. Press Ctrl-C to stop.",
                 config.transport(), config.humidityThreshold());
         stopped.await();
         close.run();

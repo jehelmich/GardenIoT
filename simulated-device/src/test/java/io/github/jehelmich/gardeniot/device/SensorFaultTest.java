@@ -1,9 +1,9 @@
 package io.github.jehelmich.gardeniot.device;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.github.jehelmich.gardeniot.device.PlantSimulation.Reading;
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class SensorFaultTest {
 
@@ -24,7 +24,8 @@ class SensorFaultTest {
     @Test
     void overreadingSensorAddsAMarginButStaysWithinRange() {
         assertThat(SensorFault.OVERREAD.apply(TRUTH, PREVIOUS).humidity()).isEqualTo(60.0);
-        assertThat(SensorFault.OVERREAD.apply(new Reading(22.0, 90.0), null).humidity()).isEqualTo(100.0);
+        assertThat(SensorFault.OVERREAD.apply(new Reading(22.0, 90.0), null).humidity())
+                .isEqualTo(100.0);
     }
 
     @Test
