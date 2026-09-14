@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gardeniot.fullname" . }}-controller
+  labels:
+    {{- include "gardeniot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+spec:
+  selector:
+    {{- include "gardeniot.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gardeniot.fullname" . }}-controller
+  labels:
+    {{- include "gardeniot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+spec:
+  replicas: {{ .Values.controller.replicas }}
+  selector:
+    matchLabels:
+      {{- include "gardeniot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: controller
+  template:
+    metadata:
+      labels:
+        {{- include "gardeniot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: controller
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      serviceAccountName: {{ include "gardeniot.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: controller
+          image: {{ include "gardeniot.image" (dict "root" . "module" "controller") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            {{- include "gardeniot.transportEnv" . | nindent 12 }}
+            {{- if eq .Values.transport "azure" }}
+            {{- include "gardeniot.azureServiceEnv" . | nindent 12 }}
+            {{- end }}
+            - name: HUMIDITY_THRESHOLD
+              value: {{ .Values.controller.humidityThreshold | quote }}
+            - name: WATERING_COOLDOWN_SECONDS
+              value: {{ .Values.controller.wateringCooldownSeconds | quote }}
+          ports:
+            - name: http
+              containerPort: 8080
+          {{- include "gardeniot.probes" . | nindent 10 }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.controller.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

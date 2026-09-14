@@ -149,3 +149,63 @@ jobs:
         env:
           IMAGE: ${{ env.IMAGE_PREFIX }}-${{ matrix.module }}
           DIGEST: ${{ steps.push.outputs.digest }}
+
+  chart:
+    name: Helm chart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+      - run: helm lint deploy/helm/gardeniot
+      - run: helm template gardeniot deploy/helm/gardeniot > /dev/null
+      - name: Render the azure profile too
+        run: |
+          helm template gardeniot deploy/helm/gardeniot \
+            --set transport=azure --set azure.hubHostName=h.azure-devices.net \
+            --set azure.eventHubNamespace=ns --set azure.eventHubName=eh \
+            --set azure.deviceConnectionStringSecret=dev --set device.replicas=1 > /dev/null
+
+  kind:
+    name: Kubernetes smoke test
+    needs: [build, chart]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: azure/setup-helm@v5
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: gardeniot
+          install_only: true
+
+      - name: Build the images with the shared cache
+        run: |
+          for module in controller simulated-device; do
+            docker buildx build --load --build-arg MODULE=$module \
+              --cache-from type=gha --cache-to type=gha,mode=max \
+              -t ghcr.io/jehelmich/gardeniot-$module:local .
+          done
+
+      - name: Install on kind
+        run: scripts/kind-up.sh --set device.telemetryIntervalSeconds=1 --set device.actionDurationSeconds=1
+
+      - name: Wait for the first watering
+        run: |
+          for i in $(seq 1 60); do
+            if kubectl -n gardeniot logs deploy/gardeniot-controller 2>/dev/null | grep -q "answered 202"; then
+              echo "watered"; exit 0
+            fi
+            sleep 3
+          done
+          echo "no watering within 3 minutes" >&2
+          kubectl -n gardeniot get pods
+          kubectl -n gardeniot logs deploy/gardeniot-controller --tail=50
+          kubectl -n gardeniot logs statefulset/gardeniot-device --tail=50
+          exit 1
+
+      - name: Metrics are scraped in-cluster
+        run: |
+          kubectl -n gardeniot port-forward svc/gardeniot-prometheus 9090:9090 &
+          sleep 5
+          curl -sf 'http://localhost:9090/api/v1/query?query=gardeniot_device_true_humidity_percent' | grep -q '"device":"basil"'

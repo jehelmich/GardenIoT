@@ -1,0 +1,11 @@
+GardenIoT is installed in namespace {{ .Release.Namespace }} using the {{ .Values.transport }} transport.
+
+Watch the loop:
+  kubectl -n {{ .Release.Namespace }} logs -f deploy/{{ include "gardeniot.fullname" . }}-controller
+  kubectl -n {{ .Release.Namespace }} logs -f statefulset/{{ include "gardeniot.fullname" . }}-device
+{{- if .Values.monitoring.enabled }}
+
+Dashboards:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "gardeniot.fullname" . }}-grafana 3000:3000
+  open http://localhost:3000/d/gardeniot
+{{- end }}

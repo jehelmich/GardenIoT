@@ -1,0 +1,85 @@
+# Default values for the gardeniot chart.
+
+image:
+  registry: ghcr.io
+  # Images are <registry>/<prefix>-<module>:<tag>, e.g. ghcr.io/jehelmich/gardeniot-controller:latest
+  prefix: jehelmich/gardeniot
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# mqtt: the bundled Mosquitto broker. azure: Azure IoT Hub, configured through `azure` below.
+transport: mqtt
+
+mosquitto:
+  enabled: true
+  image: eclipse-mosquitto:2.0.22
+  resources:
+    requests: {cpu: 20m, memory: 32Mi}
+    limits: {memory: 128Mi}
+
+controller:
+  # Keep this at 1: every controller acts on every reading, so two replicas would both command
+  # watering. Scaling it out would need partitioned consumption or leader election.
+  replicas: 1
+  humidityThreshold: 25
+  wateringCooldownSeconds: 60
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 512Mi}
+
+device:
+  # One pod per plant; pod N hosts plants[N]. Extra replicas beyond the list get a name derived
+  # from the pod, and more plants can be added at runtime through the fleet channel.
+  plants: [basil, mint]
+  replicas: 2
+  telemetryIntervalSeconds: 5
+  actionDurationSeconds: 5
+  resources:
+    requests: {cpu: 50m, memory: 192Mi}
+    limits: {memory: 384Mi}
+
+# Only read when transport is azure. Prefer workload identity: annotate the service account
+# with the client id of a managed identity that holds "IoT Hub Data Contributor" on the hub and
+# "Azure Event Hubs Data Receiver" on its built-in endpoint, and leave the secret names empty.
+azure:
+  hubHostName: ""             # <hub>.azure-devices.net
+  eventHubNamespace: ""       # fully qualified namespace of the built-in endpoint
+  eventHubName: ""            # name of the built-in endpoint's event hub
+  consumerGroup: "$Default"
+  # Fallback: names of pre-created secrets holding connection strings.
+  serviceConnectionStringSecret: ""   # key: connectionString
+  eventHubConnectionStringSecret: ""  # key: connectionString
+  deviceConnectionStringSecret: ""    # key: connectionString (one device; set device.replicas to 1)
+
+serviceAccount:
+  create: true
+  annotations: {}
+
+monitoring:
+  enabled: true
+  prometheus:
+    image: prom/prometheus:v3.13.3
+    retention: 2d
+    resources:
+      requests: {cpu: 50m, memory: 256Mi}
+      limits: {memory: 512Mi}
+  grafana:
+    image: grafana/grafana:13.0.8
+    # Anonymous admin access: fine for a demo cluster, not for anything reachable from the internet.
+    anonymousAdmin: true
+    resources:
+      requests: {cpu: 50m, memory: 128Mi}
+      limits: {memory: 256Mi}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]

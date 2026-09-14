@@ -1,0 +1,268 @@
+{{- if .Values.monitoring.enabled }}
+# --- Prometheus: discovers pods that ask to be scraped ------------------------------------------
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "gardeniot.fullname" . }}-prometheus
+  labels:
+    {{- include "gardeniot.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "gardeniot.fullname" . }}-prometheus
+  labels:
+    {{- include "gardeniot.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "gardeniot.fullname" . }}-prometheus
+  labels:
+    {{- include "gardeniot.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "gardeniot.fullname" . }}-prometheus
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "gardeniot.fullname" . }}-prometheus
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gardeniot.fullname" . }}-prometheus
+  labels:
+    {{- include "gardeniot.labels" . | nindent 4 }}
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 5s
+    scrape_configs:
+      - job_name: gardeniot
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              own_namespace: true
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: "true"
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+            target_label: job
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: instance
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gardeniot.fullname" . }}-prometheus
+  labels:
+    {{- include "gardeniot.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "gardeniot.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+  ports:
+    - name: http
+      port: 9090
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gardeniot.fullname" . }}-prometheus
+  labels:
+    {{- include "gardeniot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "gardeniot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: prometheus
+  template:
+    metadata:
+      labels:
+        {{- include "gardeniot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: prometheus
+    spec:
+      serviceAccountName: {{ include "gardeniot.fullname" . }}-prometheus
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: prometheus
+          image: {{ .Values.monitoring.prometheus.image }}
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time={{ .Values.monitoring.prometheus.retention }}
+          ports:
+            - name: http
+              containerPort: 9090
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.monitoring.prometheus.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+              readOnly: true
+            - name: data
+              mountPath: /prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "gardeniot.fullname" . }}-prometheus
+        - name: data
+          emptyDir: {}
+---
+# --- Grafana: provisioned data source and dashboard ---------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gardeniot.fullname" . }}-grafana-provisioning
+  labels:
+    {{- include "gardeniot.labels" . | nindent 4 }}
+data:
+  datasource.yml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        uid: prometheus
+        type: prometheus
+        access: proxy
+        url: http://{{ include "gardeniot.fullname" . }}-prometheus:9090
+        isDefault: true
+  dashboards.yml: |
+    apiVersion: 1
+    providers:
+      - name: gardeniot
+        type: file
+        options:
+          path: /var/lib/grafana/dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gardeniot.fullname" . }}-grafana-dashboards
+  labels:
+    {{- include "gardeniot.labels" . | nindent 4 }}
+data:
+  gardeniot.json: |
+{{ .Files.Get "dashboards/gardeniot.json" | indent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gardeniot.fullname" . }}-grafana
+  labels:
+    {{- include "gardeniot.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "gardeniot.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gardeniot.fullname" . }}-grafana
+  labels:
+    {{- include "gardeniot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "gardeniot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: grafana
+  template:
+    metadata:
+      labels:
+        {{- include "gardeniot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: grafana
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 472
+        runAsGroup: 472
+        fsGroup: 472
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: grafana
+          image: {{ .Values.monitoring.grafana.image }}
+          env:
+            {{- if .Values.monitoring.grafana.anonymousAdmin }}
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: Admin
+            - name: GF_AUTH_DISABLE_LOGIN_FORM
+              value: "true"
+            {{- end }}
+            - name: GF_ANALYTICS_REPORTING_ENABLED
+              value: "false"
+            - name: GF_NEWS_NEWS_FEED_ENABLED
+              value: "false"
+            - name: GF_PATHS_PROVISIONING
+              value: /etc/grafana/provisioning
+          ports:
+            - name: http
+              containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.monitoring.grafana.resources | nindent 12 }}
+          volumeMounts:
+            - name: provisioning
+              mountPath: /etc/grafana/provisioning/datasources/datasource.yml
+              subPath: datasource.yml
+              readOnly: true
+            - name: provisioning
+              mountPath: /etc/grafana/provisioning/dashboards/dashboards.yml
+              subPath: dashboards.yml
+              readOnly: true
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/grafana
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: provisioning
+          configMap:
+            name: {{ include "gardeniot.fullname" . }}-grafana-provisioning
+        - name: dashboards
+          configMap:
+            name: {{ include "gardeniot.fullname" . }}-grafana-dashboards
+        - name: data
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+{{- end }}

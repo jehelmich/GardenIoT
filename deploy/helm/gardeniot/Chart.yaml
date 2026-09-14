@@ -1,0 +1,13 @@
+apiVersion: v2
+name: gardeniot
+description: Automatic plant watering on MQTT or Azure IoT Hub - simulated devices, a controller, and monitoring.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+home: https://github.com/jehelmich/GardenIoT
+sources:
+  - https://github.com/jehelmich/GardenIoT
+keywords: [iot, mqtt, azure-iot-hub, demo]
+maintainers:
+  - name: Jan Helmich
+    url: https://github.com/jehelmich

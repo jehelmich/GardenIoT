@@ -32,6 +32,25 @@ class DeviceConfigTest {
     }
 
     @Test
+    void aReplicaPicksItsPlantByIndex() {
+        Environment replica1 =
+                new Environment(Map.of(DeviceConfig.PLANT_NAMES, "basil,mint", DeviceConfig.PLANT_INDEX, "1"));
+        Environment replica5 =
+                new Environment(Map.of(DeviceConfig.PLANT_NAMES, "basil,mint", DeviceConfig.PLANT_INDEX, "5"));
+        Environment explicit = new Environment(Map.of(
+                DeviceConfig.PLANT_NAMES,
+                "basil,mint",
+                DeviceConfig.PLANT_INDEX,
+                "1",
+                DeviceConfig.DEVICE_IDS,
+                "thyme"));
+
+        assertThat(DeviceConfig.fromEnvironment(replica1).deviceIds()).containsExactly("mint");
+        assertThat(DeviceConfig.fromEnvironment(replica5).deviceIds()).isEmpty();
+        assertThat(DeviceConfig.fromEnvironment(explicit).deviceIds()).containsExactly("thyme");
+    }
+
+    @Test
     void rejectsIdsThatWouldBreakTopicsOrUrls() {
         assertThatIllegalArgumentException().isThrownBy(() -> DeviceConfig.parseIds("a/b"));
         assertThatIllegalArgumentException().isThrownBy(() -> DeviceConfig.parseIds("a b"));

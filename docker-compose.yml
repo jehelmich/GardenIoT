@@ -17,7 +17,7 @@ services:
     ports:
       - "1883:1883"
     volumes:
-      - ./deploy/mosquitto:/mosquitto/config:ro
+      - ./deploy/helm/gardeniot/files/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
     healthcheck:
       test: ["CMD", "mosquitto_sub", "-h", "localhost", "-t", "$$SYS/broker/uptime", "-C", "1", "-W", "3"]
       interval: 5s
@@ -66,7 +66,7 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/helm/gardeniot/files/prometheus-compose.yml:/etc/prometheus/prometheus.yml:ro
     depends_on:
       - controller
       - device
@@ -83,7 +83,7 @@ services:
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_NEWS_NEWS_FEED_ENABLED: "false"
     volumes:
-      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./deploy/helm/gardeniot/files/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/helm/gardeniot/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - prometheus

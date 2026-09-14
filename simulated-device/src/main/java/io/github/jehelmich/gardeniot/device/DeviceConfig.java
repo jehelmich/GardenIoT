@@ -18,15 +18,37 @@ public record DeviceConfig(
         Transport transport, List<String> deviceIds, Duration telemetryInterval, Duration actionDuration) {
 
     public static final String DEVICE_IDS = "DEVICE_IDS";
+    /** For replicated deployments: a list of names and this replica's index into it. */
+    public static final String PLANT_NAMES = "PLANT_NAMES";
+
+    public static final String PLANT_INDEX = "PLANT_INDEX";
     public static final String TELEMETRY_INTERVAL = "TELEMETRY_INTERVAL_SECONDS";
     public static final String ACTION_DURATION = "ACTION_DURATION_SECONDS";
 
     public static DeviceConfig fromEnvironment(Environment env) {
         return new DeviceConfig(
                 Transport.fromEnvironment(env),
-                parseIds(env.optional(DEVICE_IDS, "")),
+                deviceIds(env),
                 env.optionalSeconds(TELEMETRY_INTERVAL, Duration.ofSeconds(5)),
                 env.optionalSeconds(ACTION_DURATION, Duration.ofSeconds(5)));
+    }
+
+    /**
+     * {@code DEVICE_IDS} wins. Otherwise, a replica that knows its index picks that entry of
+     * {@code PLANT_NAMES} — replica 0 of "basil,mint" hosts basil — and an index beyond the list
+     * means "no preset plant", leaving the default hostname-derived id to the application.
+     */
+    static List<String> deviceIds(Environment env) {
+        List<String> ids = parseIds(env.optional(DEVICE_IDS, ""));
+        if (!ids.isEmpty()) {
+            return ids;
+        }
+        List<String> names = parseIds(env.optional(PLANT_NAMES, ""));
+        int index = (int) env.optionalDouble(PLANT_INDEX, -1);
+        if (index >= 0 && index < names.size()) {
+            return List.of(names.get(index));
+        }
+        return List.of();
     }
 
     static List<String> parseIds(String commaSeparated) {

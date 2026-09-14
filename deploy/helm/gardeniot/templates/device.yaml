@@ -1,0 +1,83 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gardeniot.fullname" . }}-device
+  labels:
+    {{- include "gardeniot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: device
+spec:
+  clusterIP: None
+  selector:
+    {{- include "gardeniot.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: device
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "gardeniot.fullname" . }}-device
+  labels:
+    {{- include "gardeniot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: device
+spec:
+  serviceName: {{ include "gardeniot.fullname" . }}-device
+  replicas: {{ .Values.device.replicas }}
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      {{- include "gardeniot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: device
+  template:
+    metadata:
+      labels:
+        {{- include "gardeniot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: device
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      serviceAccountName: {{ include "gardeniot.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: device
+          image: {{ include "gardeniot.image" (dict "root" . "module" "simulated-device") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            {{- include "gardeniot.transportEnv" . | nindent 12 }}
+            {{- if eq .Values.transport "azure" }}
+            - name: IOTHUB_DEVICE_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "azure.deviceConnectionStringSecret is required for the azure transport" .Values.azure.deviceConnectionStringSecret }}
+                  key: connectionString
+            {{- else }}
+            # Pod N hosts plants[N]; see DeviceConfig.
+            - name: PLANT_NAMES
+              value: {{ join "," .Values.device.plants | quote }}
+            - name: PLANT_INDEX
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['apps.kubernetes.io/pod-index']
+            {{- end }}
+            - name: TELEMETRY_INTERVAL_SECONDS
+              value: {{ .Values.device.telemetryIntervalSeconds | quote }}
+            - name: ACTION_DURATION_SECONDS
+              value: {{ .Values.device.actionDurationSeconds | quote }}
+          ports:
+            - name: http
+              containerPort: 8080
+          {{- include "gardeniot.probes" . | nindent 10 }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.device.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
