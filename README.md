@@ -16,12 +16,13 @@ docker compose up --build        # then open http://localhost:3000
 
 ![The garden page: three plants, one thriving, two dead behind broken sensors](docs/images/garden-ui.png)
 
-*The garden page at <http://localhost:8088>, 25× speed, live weather from
-Lisbon. Every species has its own comfort band (the green stripe) and the
-controller waters each at its own threshold — the lavender is perfectly happy
-at 17 %. Mint's sensor was frozen halfway through and repaired by the
-technician in time. The prickly pear was watered twice by hand and died of
-root rot.*
+*The garden page at <http://localhost:8088>, 25× speed, breakdowns turned on.
+Every species has its own comfort band (the green stripe) and the controller
+waters each at its own threshold. The fern's pump has failed — the device
+noticed that itself. Mint's sensor got stuck; the controller noticed that from
+the readings and raised an alert, but nobody sent the technician and the
+plant died. The lavender's sensor is drifting — reading 52 % over soil at 7 % —
+and nothing has noticed yet.*
 
 ![Grafana dashboard: reported vs. true soil humidity, waterings, sensor faults](docs/images/grafana.png)
 
@@ -61,18 +62,25 @@ A hobby project from July 2017, rebuilt in 2026 as a portfolio piece. See
    while the pump runs.
 3. The controller sends the `water` **command**. The device acknowledges with
    `202 Accepted`, runs the pump on a background thread, soaks the soil, and
-   reports `lastWater` as device state. Direct method on IoT Hub, request/response
-   over MQTT 5 — the application code does not know which.
-4. Both processes expose Prometheus metrics. The device also exposes the
+   reports the outcome as device state — or answers `500` if its flow meter saw
+   nothing come out. Direct method on IoT Hub, request/response over MQTT 5 —
+   the application code does not know which.
+4. The controller also **watches for what a device cannot know about itself**:
+   a reading that repeats to the digit (stuck sensor), soil that does not get
+   wetter after an accepted watering, a device that goes quiet, a pump that
+   said no. It raises **alerts** — a desired property on the twin, a retained
+   topic on MQTT — and clears them when the symptom passes.
+5. Both processes expose Prometheus metrics. The device also exposes the
    simulator's **ground truth** next to what its sensor claimed, which is how the
    dashboard shows a lying sensor.
-5. The **garden page** watches the same broker and renders every plant live:
+6. The **garden page** watches the same broker and renders every plant live:
    it grows while the soil is comfortably damp, wilts as its health drains, and
-   dies when it reaches zero. From the page you can water, break a sensor, call
-   the technician, repot, add species, set the weather — fixed, changing, or
-   live from any place on Earth via Open-Meteo — and run the whole simulation
-   up to 50×. A small game that shows what the loop does, and what it cannot
-   know.
+   dies when it reaches zero. It shows what the device says about itself and
+   what the controller says about the device. From the page you can water,
+   call the technician, repot, add species, turn breakdowns on, set the
+   weather — fixed, changing, or live from any place on Earth via Open-Meteo —
+   and run the whole simulation up to 50×. A small game that shows what the
+   loop does, and what it cannot know.
 
 The applications talk to *ports* (`DeviceTransport`, `TelemetrySource`,
 `DeviceCommandSender`); `transport-mqtt` and `transport-azure` are the adapters.
@@ -173,12 +181,14 @@ in this repository.
 | `METRICS_PORT` | both | Port for `/metrics`, `/healthz`, `/readyz`; default `8080`, `0` disables |
 | `HUMIDITY_THRESHOLD` | controller | Water below this soil humidity in percent; default `25` |
 | `WATERING_COOLDOWN_SECONDS` | controller | Minimum time between two watering commands to one device; default `15` |
+| `SILENCE_AFTER_SECONDS` | controller | Raise the `silent` alert after this long without a reading; default `60` |
 | `DEVICE_IDS` | device | Comma-separated plants to host; default: one named after the machine |
 | `PLANT_NAMES`, `PLANT_INDEX` | device | For replicas: this replica hosts `PLANT_NAMES[PLANT_INDEX]` |
 | `TELEMETRY_INTERVAL_SECONDS` | device | Seconds between readings at speed 1; default `5` |
 | `ACTION_DURATION_SECONDS` | device | How long the pump and a reboot take at speed 1; default `5` |
 | `WEATHER` | device | `clear`, `rain`, `drought`, `heatwave`, `cold`, `auto` (changes by itself) or `real`; default `clear`, compose uses `auto` |
 | `WEATHER_LATITUDE`, `WEATHER_LONGITUDE`, `WEATHER_PLACE` | device | Where `real` weather is fetched for (Open-Meteo, no key) |
+| `WEAR_MEAN_TICKS` | device | Average readings between random breakdowns; default `0` (never), compose uses `1500` |
 | `UI_PORT` | garden-ui | Port of the page (with `/metrics` and health on it); default `8080`, compose maps it to 8088 |
 
 MQTT transport:
@@ -208,12 +218,14 @@ taken from it) and optionally `IOTHUB_DEVICE_PROTOCOL` (`MQTT`, `MQTT_WS`,
 
 | Command | Payload | Effect |
 |---|---|---|
-| `water` | – | `202`; runs the pump, adds a dose to the soil |
+| `water` | – | `202`; runs the pump, adds a dose to the soil — `500` if the flow meter sees nothing |
 | `reboot` | – | `202`; restarts, reports `lastReboot` |
-| `repairSensor` | – | `202`; a technician recalibrates or replaces the sensor after a while (`409` if a job is under way) |
+| `callTechnician` | – | `202`; sensor recalibrated or replaced and pump serviced after a while (`409` if a job is under way) |
 | `repot` | – | `202`; a fresh seedling of the same species (`409` if a job is under way) |
 | `setSpeed` | `{"factor": 25}` | Runs the simulation faster (0.1–100×) |
-| `fault` | `{"type": "STUCK"}` | `NONE`, `STUCK`, `OVERREAD` or `SILENT` sensor |
+| `fault` | `{"type": "STUCK"}` | `NONE`, `STUCK`, `DRIFT`, `OVERREAD` or `SILENT` sensor |
+| `pump` | `{"failed": true}` | Break or fix the pump |
+| `setWear` | `{"meanTicks": 1500}` | How often things break on their own; `0` never |
 | `setWeather` | `{"mode": "rain"}` or `{"mode": "real", "latitude": 38.7, "longitude": -9.1, "place": "Lisbon"}` | Fixed, `auto`, or live weather |
 | `status` | – | The simulator's view: species, true humidity, health, growth, weather, jobs, waterings |
 
@@ -223,9 +235,13 @@ becomes that species), `removePlant`, `listPlants`, `listProfiles`.
 
 The garden page wraps the same commands in a JSON API: `GET /api/profiles`,
 `POST /api/plants`, `DELETE /api/plants/{id}`,
-`POST /api/plants/{id}/commands/{name}`, `POST /api/speed`, `POST /api/weather`
-(a place name is geocoded first); `GET /events` is the server-sent event stream
-the page renders from.
+`POST /api/plants/{id}/commands/{name}`, `POST /api/speed`, `POST /api/wear`,
+`POST /api/weather` (a place name is geocoded first); `GET /events` is the
+server-sent event stream the page renders from.
+
+Alerts the controller raises (`sensorStuck`, `wateringIneffective`, `silent`,
+`pumpFault`) are published as `garden/{id}/alert/{name}` on MQTT and as the
+`alerts` desired property on the IoT Hub twin.
 
 ## Engineering notes
 
@@ -237,7 +253,12 @@ the page renders from.
   parsed with one codec that rejects malformed and out-of-range documents.
 - **Per-device configuration lives on the twin.** A plant's needs travel as a
   reported property (`WateringProfile`), and the controller reads them through
-  a port — the same shape on IoT Hub (twin) and MQTT (retained topic).
+  a port — the same shape on IoT Hub (twin) and MQTT (retained topic). Alerts
+  travel the other way, as a desired property.
+- **Failure is a feature.** Sensors and pumps break on their own; the device
+  reports what it can see (no flow) and the controller infers what it cannot
+  (a frozen reading, ineffective watering, silence). A drifting sensor fools
+  both, on purpose.
 - **Identity over secrets.** On Azure the service side uses `DefaultAzureCredential`
   — managed identity in the cloud, the developer's login locally — with
   connection strings only as a fallback. Device identity comes from what the

@@ -11,3 +11,4 @@ Short records of the decisions that shaped this repository, in the order they we
 | [0005](0005-single-controller.md) | Run one controller |
 | [0006](0006-simulator-reports-ground-truth.md) | Let the simulator report its ground truth |
 | [0007](0007-plant-needs-on-the-twin.md) | A plant's needs travel as reported device state |
+| [0008](0008-alerts-from-the-outside.md) | Detect device faults from the outside, and say so on the twin |
