@@ -165,6 +165,19 @@ jobs:
             --set azure.eventHubNamespace=ns --set azure.eventHubName=eh \
             --set azure.deviceConnectionStringSecret=dev --set device.replicas=1 > /dev/null
 
+  terraform:
+    name: Terraform (Azure)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: deploy/terraform/azure
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
+      - run: terraform fmt -check -diff
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate
+
   kind:
     name: Kubernetes smoke test
     needs: [build, chart]
