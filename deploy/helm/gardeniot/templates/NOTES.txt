@@ -3,6 +3,12 @@ GardenIoT is installed in namespace {{ .Release.Namespace }} using the {{ .Value
 Watch the loop:
   kubectl -n {{ .Release.Namespace }} logs -f deploy/{{ include "gardeniot.fullname" . }}-controller
   kubectl -n {{ .Release.Namespace }} logs -f statefulset/{{ include "gardeniot.fullname" . }}-device
+{{- if and .Values.ui.enabled (eq .Values.transport "mqtt") }}
+
+The garden page:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "gardeniot.fullname" . }}-ui 8088:8080
+  open http://localhost:8088
+{{- end }}
 {{- if .Values.monitoring.enabled }}
 
 Dashboards:

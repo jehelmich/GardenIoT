@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GardenIoT</title>
+<style>
+  :root {
+    --bg: #f4f6ef; --card: #ffffff; --ink: #1f2a1f; --muted: #6b7a6b; --line: #dfe5d8;
+    --green: #3f9d3f; --blue: #3b82c4; --amber: #d9a12a; --red: #c8452b; --soil: #6e4b2a;
+    --radius: 14px; --shadow: 0 1px 2px rgba(20,40,20,.06), 0 6px 18px rgba(20,40,20,.06);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  body { padding: 20px 20px 40px; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 28px; margin-bottom: 18px; }
+  header h1 { font-size: 22px; margin: 0; letter-spacing: .2px; display: flex; align-items: center; gap: 10px; }
+  header h1 small { font-weight: 400; color: var(--muted); font-size: 14px; }
+  .conn { width: 9px; height: 9px; border-radius: 50%; background: var(--red); display: inline-block; }
+  .conn.on { background: var(--green); }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; margin-left: auto; }
+  .control { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+  .control input[type=range] { width: 150px; accent-color: var(--green); }
+  .control output { min-width: 3.2em; color: var(--ink); font-variant-numeric: tabular-nums; font-weight: 600; }
+  input[type=text] { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; width: 150px; background: #fff; }
+  button, select { font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line);
+    background: #fff; color: var(--ink); cursor: pointer; }
+  button:hover { border-color: #b9c5b0; background: #f7faf3; }
+  button.primary { background: var(--green); border-color: var(--green); color: #fff; }
+  button.primary:hover { background: #368a36; }
+  button.danger { color: var(--red); }
+  button:disabled { opacity: .5; cursor: default; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .garden { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; }
+  .empty { grid-column: 1 / -1; color: var(--muted); padding: 40px; text-align: center; border: 1px dashed var(--line); border-radius: var(--radius); }
+  .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 8px; transition: box-shadow .2s; }
+  .card.offline { opacity: .55; }
+  .card.dead { background: #f8f2ea; }
+  .card .title { display: flex; align-items: center; gap: 8px; }
+  .card .title h2 { font-size: 17px; margin: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .badge { font-size: 11px; font-weight: 600; letter-spacing: .3px; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; background: #eef2e8; color: var(--muted); }
+  .badge.fault { background: #fff1e0; color: #a05f00; }
+  .badge.dead { background: #f3e1d6; color: #8b3a1c; }
+  .badge.off { background: #eee; color: #777; }
+  .stage { height: 150px; display: flex; justify-content: center; }
+  .stage svg { height: 100%; width: auto; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 13px; }
+  .stats .k { color: var(--muted); }
+  .stats .v { font-variant-numeric: tabular-nums; text-align: right; }
+  .stats .v.warn { color: var(--amber); font-weight: 600; }
+  .stats .v.bad { color: var(--red); font-weight: 600; }
+  .bar { height: 6px; background: #edf1e8; border-radius: 3px; overflow: hidden; position: relative; margin-top: 2px; }
+  .bar i { display: block; height: 100%; border-radius: 3px; background: var(--blue); transition: width .3s; }
+  .bar i.health { background: var(--green); }
+  .bar i.growth { background: #8fbf3a; }
+  .bar .th { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--red); opacity: .6; }
+  .bar .truth { position: absolute; top: -3px; width: 2px; height: 12px; background: var(--ink); opacity: .45; }
+  .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .actions select { padding: 5px 8px; }
+  .actions .spacer { flex: 1; }
+  .card .last { font-size: 12px; color: var(--muted); min-height: 1.2em; }
+  aside { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px; }
+  aside h3 { margin: 0 0 8px; font-size: 14px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+  #log { list-style: none; margin: 0; padding: 0; font-size: 13px; max-height: 70vh; overflow: auto; }
+  #log li { padding: 5px 0; border-bottom: 1px solid var(--line); display: flex; gap: 8px; }
+  #log li time { color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
+  #log li.water { color: #1d5fa3; } #log li.fault { color: #a05f00; } #log li.dead { color: var(--red); } #log li.fleet { color: #4b6b2a; }
+  .help { font-size: 13px; color: var(--muted); margin-top: 12px; line-height: 1.5; }
+  .help b { color: var(--ink); }
+  #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90vw; }
+  #toast.show { opacity: .95; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="conn" id="conn"></span> GardenIoT <small>live garden</small></h1>
+  <div class="controls">
+    <label class="control" title="Runs every plant's simulation faster. Real time is 1x.">
+      Speed <input type="range" id="speed" min="0" max="6" step="1" value="0" list="speeds">
+      <output id="speedOut">1×</output>
+    </label>
+    <form class="control" id="addForm">
+      <input type="text" id="addName" placeholder="new plant name" pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,63}" maxlength="64" required>
+      <button class="primary" type="submit">Add plant</button>
+    </form>
+  </div>
+</header>
+
+<main>
+  <section class="garden" id="garden"><div class="empty">Waiting for plants… start a device process, or add one.</div></section>
+  <aside>
+    <h3>What just happened</h3>
+    <ul id="log"></ul>
+    <div class="help">
+      Each card is a simulated device talking to the same broker as the controller.
+      The controller only ever sees <b>sensor says</b>; <b>truth</b> is the simulator's own view.
+      Break a sensor and watch the controller do the right thing with the wrong information.
+    </div>
+  </aside>
+</main>
+<div id="toast"></div>
+
+<script>
+(() => {
+  const SPEEDS = [1, 2, 5, 10, 25, 50, 100];
+  const THRESHOLD = 25;            // the controller's default; drawn on the humidity bar
+  const plants = new Map();        // deviceId -> {deviceId, online, telemetry, state, lastCommand}
+  const cards = new Map();         // deviceId -> card element
+  const garden = document.getElementById('garden');
+  const logEl = document.getElementById('log');
+  const conn = document.getElementById('conn');
+
+  // ---- events from the server ---------------------------------------------------------------
+  function connect() {
+    const es = new EventSource('/events');
+    es.onopen = () => conn.classList.add('on');
+    es.onerror = () => conn.classList.remove('on');
+    es.onmessage = e => handle(JSON.parse(e.data));
+  }
+
+  function handle(ev) {
+    switch (ev.type) {
+      case 'snapshot':
+        plants.clear();
+        ev.plants.forEach(p => plants.set(p.deviceId, p));
+        renderAll();
+        break;
+      case 'telemetry': {
+        const p = plant(ev.deviceId);
+        p.telemetry = ev.telemetry; p.online = true;
+        update(p);
+        break;
+      }
+      case 'state': {
+        const p = plant(ev.deviceId);
+        const before = p.state.simulation;
+        p.state[ev.name] = ev.value;
+        if (ev.name === 'simulation' && before) {
+          if (ev.value.waterings > before.waterings) log(`${p.deviceId} was watered (${ev.value.waterings}×)`, 'water');
+          if (ev.value.fault !== before.fault) log(`${p.deviceId}: sensor ${ev.value.fault === 'NONE' ? 'repaired' : 'fault ' + ev.value.fault}`, 'fault');
+          if (before.alive && !ev.value.alive) log(`${p.deviceId} died`, 'dead');
+          if (ev.value.speed !== before.speed) syncSpeed();
+        }
+        if (ev.name === 'lastReboot') log(`${p.deviceId} rebooted`);
+        update(p);
+        break;
+      }
+      case 'status': {
+        const p = plant(ev.deviceId);
+        p.online = ev.online;
+        log(`${p.deviceId} is ${ev.online ? 'online' : 'offline'}`);
+        update(p);
+        break;
+      }
+      case 'command': {
+        const p = plant(ev.deviceId);
+        p.lastCommand = ev.command; p.lastCommandAt = ev.at;
+        log(`command ${ev.command} → ${p.deviceId}`, ev.command === 'water' ? 'water' : '');
+        update(p);
+        break;
+      }
+      case 'fleet':
+        log(`fleet: ${ev.command} ${ev.payload ? JSON.stringify(ev.payload) : ''}`, 'fleet');
+        break;
+      case 'removed':
+        plants.delete(ev.deviceId);
+        renderAll();
+        break;
+    }
+  }
+
+  function plant(id) {
+    if (!plants.has(id)) { plants.set(id, { deviceId: id, online: true, telemetry: null, state: {}, lastCommand: null }); renderAll(); }
+    return plants.get(id);
+  }
+
+  // ---- rendering ---------------------------------------------------------------------------
+  function renderAll() {
+    garden.innerHTML = '';
+    cards.clear();
+    if (plants.size === 0) {
+      garden.innerHTML = '<div class="empty">Waiting for plants… start a device process, or add one.</div>';
+      return;
+    }
+    [...plants.keys()].sort().forEach(id => {
+      const card = buildCard(id);
+      cards.set(id, card);
+      garden.appendChild(card);
+      update(plants.get(id));
+    });
+    syncSpeed();
+  }
+
+  function buildCard(id) {
+    const el = document.createElement('article');
+    el.className = 'card';
+    el.innerHTML = `
+      <div class="title"><h2></h2><span class="badge" data-f="badge"></span></div>
+      <div class="stage" data-f="stage"></div>
+      <div class="stats">
+        <span class="k">sensor says</span><span class="v" data-f="reported">–</span>
+        <div class="bar" style="grid-column:1/-1"><i data-f="reportedBar"></i><span class="th" style="left:${THRESHOLD}%"></span><span class="truth" data-f="truthMark"></span></div>
+        <span class="k">truth</span><span class="v" data-f="truth">–</span>
+        <span class="k">temperature</span><span class="v" data-f="temp">–</span>
+        <span class="k">health</span><span class="v" data-f="health">–</span>
+        <div class="bar" style="grid-column:1/-1"><i class="health" data-f="healthBar"></i></div>
+        <span class="k">growth</span><span class="v" data-f="growth">–</span>
+        <div class="bar" style="grid-column:1/-1"><i class="growth" data-f="growthBar"></i></div>
+        <span class="k">waterings</span><span class="v" data-f="waterings">–</span>
+      </div>
+      <div class="actions">
+        <button data-a="water" title="Send the water command, as the controller would">💧 Water</button>
+        <select data-a="fault" title="Break or repair the humidity sensor">
+          <option value="NONE">sensor: healthy</option>
+          <option value="STUCK">sensor: stuck</option>
+          <option value="OVERREAD">sensor: over-reading</option>
+          <option value="SILENT">sensor: silent</option>
+        </select>
+        <span class="spacer"></span>
+        <button data-a="remove" class="danger" title="Remove this plant from its device process">Remove</button>
+      </div>
+      <div class="last" data-f="last"></div>`;
+    el.querySelector('h2').textContent = id;
+    el.querySelector('[data-a=water]').onclick = () => command(id, 'water');
+    el.querySelector('[data-a=fault]').onchange = e => command(id, 'fault', { type: e.target.value });
+    el.querySelector('[data-a=remove]').onclick = () => api('DELETE', `/api/plants/${encodeURIComponent(id)}`);
+    return el;
+  }
+
+  function update(p) {
+    const el = cards.get(p.deviceId);
+    if (!el) return;
+    const f = name => el.querySelector(`[data-f=${name}]`);
+    const sim = p.state.simulation || {};
+    const reported = p.telemetry ? p.telemetry.humidity : null;
+    const truth = sim.trueHumidity;
+    const alive = sim.alive !== false;
+    const fault = sim.fault || 'NONE';
+
+    el.classList.toggle('offline', !p.online);
+    el.classList.toggle('dead', !alive);
+    const badge = f('badge');
+    if (!p.online) { badge.textContent = 'offline'; badge.className = 'badge off'; }
+    else if (!alive) { badge.textContent = 'dead'; badge.className = 'badge dead'; }
+    else if (fault !== 'NONE') { badge.textContent = 'sensor ' + fault.toLowerCase(); badge.className = 'badge fault'; }
+    else { badge.textContent = 'healthy'; badge.className = 'badge'; }
+
+    const silent = fault === 'SILENT';
+    f('reported').textContent = silent ? 'silent' : reported == null ? '–' : pct(reported);
+    f('reported').className = 'v ' + (silent ? 'warn' : reported != null && reported < THRESHOLD ? 'bad' : '');
+    f('reportedBar').style.width = (silent || reported == null ? 0 : reported) + '%';
+    f('truthMark').style.left = (truth == null ? 0 : truth) + '%';
+    f('truthMark').style.display = truth == null ? 'none' : '';
+    f('truth').textContent = truth == null ? '–' : pct(truth);
+    f('truth').className = 'v ' + (truth != null && reported != null && Math.abs(truth - reported) > 10 ? 'warn' : '');
+    f('temp').textContent = sim.trueTemperature != null ? sim.trueTemperature.toFixed(1) + ' °C' : (p.telemetry ? p.telemetry.temperature.toFixed(1) + ' °C' : '–');
+    f('health').textContent = sim.health != null ? pct(sim.health) : '–';
+    f('healthBar').style.width = (sim.health || 0) + '%';
+    f('healthBar').style.background = sim.health == null ? '' : healthColor(sim.health);
+    f('growth').textContent = sim.growth != null ? pct(sim.growth) : '–';
+    f('growthBar').style.width = (sim.growth || 0) + '%';
+    f('waterings').textContent = sim.waterings != null ? sim.waterings : '–';
+    const sel = el.querySelector('[data-a=fault]');
+    if (sel.value !== fault) sel.value = fault;
+    el.querySelector('[data-a=water]').disabled = !p.online;
+    f('last').textContent = p.lastCommand ? `last command: ${p.lastCommand} at ${time(p.lastCommandAt)}` : '';
+    f('stage').innerHTML = plantSvg(sim.growth ?? 10, sim.health ?? 70, alive, truth ?? 50, sim.speed || 1);
+  }
+
+  function pct(v) { return v.toFixed(1) + ' %'; }
+  function time(iso) { return iso ? new Date(iso).toLocaleTimeString() : ''; }
+
+  // health 100 → green, 50 → yellow-green, 0 → brown
+  function healthColor(h) {
+    const hue = h >= 50 ? 70 + (h - 50) * 0.9 : 25 + h * 0.9;       // 25..70..115
+    const sat = h >= 50 ? 55 : 35 + h * 0.4;
+    const light = 38 + (100 - h) * 0.05;
+    return `hsl(${hue.toFixed(0)} ${sat.toFixed(0)}% ${light.toFixed(0)}%)`;
+  }
+
+  function soilColor(h) {  // dry sand → dark wet earth
+    const t = Math.max(0, Math.min(1, h / 100));
+    const mix = (a, b) => Math.round(a + (b - a) * t);
+    return `rgb(${mix(190, 70)} ${mix(150, 45)} ${mix(100, 25)})`;
+  }
+
+  // The plant: a pot, soil coloured by real humidity, a stem that grows with growth, leaves that
+  // green up with health and droop as it fails, a flower when it is both grown and thriving.
+  function plantSvg(growth, health, alive, humidity, speed) {
+    const g = Math.max(0, Math.min(100, growth)), h = alive ? Math.max(0, Math.min(100, health)) : 0;
+    const stemH = 18 + g * 0.78;
+    const topY = 104 - stemH;
+    const lean = (100 - h) * 0.28;                       // wilting bends the stem
+    const leafColor = healthColor(h);
+    const stemColor = alive ? healthColor(Math.max(h, 35)) : '#7a5a3a';
+    let parts = [];
+    parts.push(`<path d="M60 104 Q ${60 + lean} ${104 - stemH * 0.55} ${60 + lean * 1.6} ${topY}" stroke="${stemColor}" stroke-width="${2.5 + g * 0.02}" fill="none" stroke-linecap="round"/>`);
+    const leaves = Math.min(8, 1 + Math.floor(g / 12));
+    for (let i = 0; i < leaves; i++) {
+      const t = (i + 1) / (leaves + 1);
+      const y = 104 - stemH * t;
+      const x = 60 + lean * 1.6 * t * t;
+      const side = i % 2 === 0 ? -1 : 1;
+      const size = 9 + g * 0.09 * (1 - t * 0.4);
+      const droop = (100 - h) * 0.7;                     // healthy leaves reach up, sick ones hang
+      const angle = side * (-25 + droop);
+      parts.push(`<ellipse cx="${x + side * size * 0.9}" cy="${y}" rx="${size}" ry="${size * 0.45}" fill="${leafColor}" transform="rotate(${angle} ${x} ${y})" opacity="${alive ? 1 : 0.75}"/>`);
+    }
+    if (alive && g > 85 && h > 75) {
+      const fx = 60 + lean * 1.6, fy = topY - 4;
+      for (let k = 0; k < 5; k++) {
+        const a = k * 72 * Math.PI / 180;
+        parts.push(`<circle cx="${fx + Math.cos(a) * 5}" cy="${fy + Math.sin(a) * 5}" r="3.6" fill="#e56fa1"/>`);
+      }
+      parts.push(`<circle cx="${fx}" cy="${fy}" r="2.6" fill="#ffd166"/>`);
+    }
+    if (!alive) {
+      parts.push(`<text x="60" y="40" text-anchor="middle" font-size="11" fill="#8b3a1c">✝</text>`);
+    }
+    const drops = h > 0 && humidity > 92
+      ? `<circle cx="42" cy="118" r="1.8" fill="#6db3f2"/><circle cx="78" cy="122" r="1.8" fill="#6db3f2"/>` : '';
+    const fast = speed > 1 ? `<text x="114" y="12" text-anchor="end" font-size="9" fill="#9a6fd0">${speed}×</text>` : '';
+    return `<svg viewBox="0 0 120 140" role="img" aria-label="plant">
+      ${fast}
+      <path d="M30 106 L90 106 L84 136 L36 136 Z" fill="#c8713d"/>
+      <rect x="27" y="100" width="66" height="9" rx="2" fill="#d98449"/>
+      <ellipse cx="60" cy="104" rx="30" ry="6" fill="${soilColor(humidity)}"/>
+      ${parts.join('')}
+      ${drops}
+    </svg>`;
+  }
+
+  // ---- controls ----------------------------------------------------------------------------
+  const speedIn = document.getElementById('speed');
+  const speedOut = document.getElementById('speedOut');
+  speedIn.oninput = () => speedOut.textContent = SPEEDS[speedIn.value] + '×';
+  speedIn.onchange = () => api('POST', '/api/speed', { factor: SPEEDS[speedIn.value] });
+
+  function syncSpeed() {
+    // Show the speed most plants are running at.
+    const counts = new Map();
+    for (const p of plants.values()) { const s = p.state.simulation?.speed; if (s) counts.set(s, (counts.get(s) || 0) + 1); }
+    const [common] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0] || [1];
+    const idx = SPEEDS.indexOf(common);
+    if (idx >= 0 && document.activeElement !== speedIn) { speedIn.value = idx; speedOut.textContent = common + '×'; }
+  }
+
+  document.getElementById('addForm').onsubmit = async e => {
+    e.preventDefault();
+    const input = document.getElementById('addName');
+    const ok = await api('POST', '/api/plants', { deviceId: input.value.trim() });
+    if (ok) input.value = '';
+  };
+
+  function command(id, name, payload) {
+    return api('POST', `/api/plants/${encodeURIComponent(id)}/commands/${name}`, payload);
+  }
+
+  async function api(method, path, payload) {
+    try {
+      const res = await fetch(path, { method, headers: { 'Content-Type': 'application/json' }, body: payload ? JSON.stringify(payload) : null });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) { toast(body.message || (body.payload && body.payload.message) || `${res.status} ${res.statusText}`); return false; }
+      return true;
+    } catch (err) { toast(err.message); return false; }
+  }
+
+  // ---- log and toast -----------------------------------------------------------------------
+  function log(text, cls = '') {
+    const li = document.createElement('li');
+    li.className = cls;
+    li.innerHTML = `<time>${new Date().toLocaleTimeString()}</time><span></span>`;
+    li.querySelector('span').textContent = text;
+    logEl.prepend(li);
+    while (logEl.children.length > 60) logEl.lastChild.remove();
+  }
+
+  let toastTimer;
+  function toast(text) {
+    const t = document.getElementById('toast');
+    t.textContent = text; t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 4000);
+  }
+
+  connect();
+})();
+</script>
+</body>
+</html>

@@ -38,6 +38,13 @@ device:
     requests: {cpu: 50m, memory: 192Mi}
     limits: {memory: 384Mi}
 
+# The garden page: watches the MQTT bus, so it is only installed with the mqtt transport.
+ui:
+  enabled: true
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 256Mi}
+
 # Only read when transport is azure. Prefer workload identity: annotate the service account
 # with the client id of a managed identity that holds "IoT Hub Data Contributor" on the hub and
 # "Azure Event Hubs Data Receiver" on its built-in endpoint, and leave the secret names empty.

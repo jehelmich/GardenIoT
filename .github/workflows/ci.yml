@@ -61,6 +61,7 @@ jobs:
           path: |
             controller/target/controller.jar
             simulated-device/target/simulated-device.jar
+            garden-ui/target/garden-ui.jar
           if-no-files-found: error
 
   images:
@@ -75,7 +76,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        module: [controller, simulated-device]
+        module: [controller, simulated-device, garden-ui]
     steps:
       - uses: actions/checkout@v7
 
@@ -194,7 +195,7 @@ jobs:
 
       - name: Build the images with the shared cache
         run: |
-          for module in controller simulated-device; do
+          for module in controller simulated-device garden-ui; do
             docker buildx build --load --build-arg MODULE=$module \
               --cache-from type=gha --cache-to type=gha,mode=max \
               -t ghcr.io/jehelmich/gardeniot-$module:local .

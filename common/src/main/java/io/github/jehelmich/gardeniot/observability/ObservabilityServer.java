@@ -47,6 +47,15 @@ public final class ObservabilityServer implements AutoCloseable {
 
     public static ObservabilityServer start(int port, Metrics metrics, BooleanSupplier ready) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
+        register(server, metrics, ready);
+        server.setExecutor(null);
+        server.start();
+        log.info("Metrics on http://0.0.0.0:{}/metrics", server.getAddress().getPort());
+        return new ObservabilityServer(server);
+    }
+
+    /** Adds the three endpoints to a server the application already runs. */
+    public static void register(HttpServer server, Metrics metrics, BooleanSupplier ready) {
         server.createContext(
                 "/metrics",
                 exchange -> respond(exchange, 200, "text/plain; version=0.0.4; charset=utf-8", metrics.scrape()));
@@ -58,10 +67,6 @@ public final class ObservabilityServer implements AutoCloseable {
                 respond(exchange, 503, "text/plain", "not ready\n");
             }
         });
-        server.setExecutor(null);
-        server.start();
-        log.info("Metrics on http://0.0.0.0:{}/metrics", server.getAddress().getPort());
-        return new ObservabilityServer(server);
     }
 
     public int port() {

@@ -21,7 +21,7 @@ if ! kind get clusters 2>/dev/null | grep -qx "$CLUSTER"; then
 fi
 kubectl config use-context "kind-$CLUSTER" >/dev/null
 
-for module in controller simulated-device; do
+for module in controller simulated-device garden-ui; do
   image="ghcr.io/jehelmich/gardeniot-$module:$TAG"
   docker build --quiet --build-arg MODULE="$module" -t "$image" .
   kind load docker-image --name "$CLUSTER" "$image"
@@ -35,6 +35,7 @@ helm upgrade --install gardeniot "$CHART" \
 echo
 kubectl -n "$NAMESPACE" get pods
 echo
+echo "Garden page: kubectl -n $NAMESPACE port-forward svc/gardeniot-ui 8088:8080          then open http://localhost:8088"
 echo "Grafana:     kubectl -n $NAMESPACE port-forward svc/gardeniot-grafana 3000:3000   then open http://localhost:3000/d/gardeniot"
 echo "Controller:  kubectl -n $NAMESPACE logs -f deploy/gardeniot-controller"
 echo "Tear down:   scripts/kind-down.sh"

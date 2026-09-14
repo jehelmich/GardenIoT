@@ -3,6 +3,7 @@
 #   docker compose up --build
 #
 # Two plants (basil, mint) dry out, the controller waters them. Watch the logs, or open
+#   http://localhost:8088   the garden page: watch, water, break sensors, add plants, change speed
 #   http://localhost:3000   Grafana, with the GardenIoT dashboard provisioned
 #   http://localhost:9090   Prometheus
 #
@@ -53,6 +54,21 @@ services:
       MQTT_HOST: mosquitto
       DEVICE_IDS: ${DEVICE_IDS:-basil,mint}
       TELEMETRY_INTERVAL_SECONDS: ${TELEMETRY_INTERVAL_SECONDS:-5}
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    restart: unless-stopped
+
+  garden-ui:
+    build:
+      context: .
+      args:
+        MODULE: garden-ui
+    image: ghcr.io/jehelmich/gardeniot-garden-ui:local
+    environment:
+      MQTT_HOST: mosquitto
+    ports:
+      - "8088:8080"
     depends_on:
       mosquitto:
         condition: service_healthy

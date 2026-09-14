@@ -14,6 +14,8 @@ public final class DeviceMetrics {
     static final String TEMPERATURE = "gardeniot_device_temperature_celsius";
     static final String SPEED = "gardeniot_device_speed_factor";
     static final String FAULT = "gardeniot_device_sensor_fault_code";
+    static final String HEALTH = "gardeniot_device_plant_health_percent";
+    static final String GROWTH = "gardeniot_device_plant_growth_percent";
     static final String TELEMETRY_SENT_TOTAL = "gardeniot_device_telemetry_sent_total";
     static final String WATERINGS_TOTAL = "gardeniot_device_waterings_total";
     static final String COMMANDS_TOTAL = "gardeniot_device_commands_total";
@@ -24,7 +26,10 @@ public final class DeviceMetrics {
         this.metrics = metrics;
     }
 
-    void tick(String deviceId, Reading truth, Reading reported, SensorFault fault, double speed) {
+    void tick(
+            String deviceId, Reading truth, Reading reported, SensorFault fault, double speed, PlantSimulation plant) {
+        metrics.gauge(HEALTH, "Plant health: 0 dead, 100 thriving", deviceId, plant.health());
+        metrics.gauge(GROWTH, "Plant growth: 0 seedling, 100 fully grown", deviceId, plant.growth());
         metrics.gauge(TRUE_HUMIDITY, "Actual soil humidity in the simulation", deviceId, truth.humidity());
         metrics.gauge(TEMPERATURE, "Air temperature in the simulation", deviceId, truth.temperature());
         metrics.gauge(SPEED, "Simulation speed factor", deviceId, speed);

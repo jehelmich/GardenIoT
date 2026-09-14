@@ -8,6 +8,9 @@ import java.time.Instant;
  *
  * @param trueHumidity    actual soil humidity, regardless of sensor faults
  * @param trueTemperature actual air temperature
+ * @param health          0 (dead) to 100 (thriving)
+ * @param growth          0 (seedling) to 100 (fully grown)
+ * @param alive           false once health has reached zero
  * @param fault           the current sensor fault
  * @param speed           simulation speed factor; 1 is real time
  * @param waterings       how often the pump has run
@@ -17,6 +20,9 @@ import java.time.Instant;
 public record SimulationState(
         double trueHumidity,
         double trueTemperature,
+        double health,
+        double growth,
+        boolean alive,
         SensorFault fault,
         double speed,
         int waterings,

@@ -1,0 +1,65 @@
+{{- if and .Values.ui.enabled (eq .Values.transport "mqtt") }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gardeniot.fullname" . }}-ui
+  labels:
+    {{- include "gardeniot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ui
+spec:
+  selector:
+    {{- include "gardeniot.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: ui
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gardeniot.fullname" . }}-ui
+  labels:
+    {{- include "gardeniot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "gardeniot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: ui
+  template:
+    metadata:
+      labels:
+        {{- include "gardeniot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: ui
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      serviceAccountName: {{ include "gardeniot.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: ui
+          image: {{ include "gardeniot.image" (dict "root" . "module" "garden-ui") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            {{- include "gardeniot.transportEnv" . | nindent 12 }}
+            - name: UI_PORT
+              value: "8080"
+          ports:
+            - name: http
+              containerPort: 8080
+          {{- include "gardeniot.probes" . | nindent 10 }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.ui.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+{{- end }}

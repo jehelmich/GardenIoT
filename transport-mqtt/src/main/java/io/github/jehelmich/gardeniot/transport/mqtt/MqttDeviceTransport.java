@@ -38,6 +38,7 @@ public final class MqttDeviceTransport implements DeviceTransport {
                 .topicFilter(topics.deviceCommands(deviceId))
                 .qos(MqttClients.QOS)
                 .callback(responder::onRequest)
+                .executor(MqttClients.CALLBACKS)
                 .send()
                 .get(PUBLISH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         transport.publishRetained(topics.status(deviceId), MqttTopics.ONLINE);

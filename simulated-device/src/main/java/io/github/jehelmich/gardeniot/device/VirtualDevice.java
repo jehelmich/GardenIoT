@@ -124,7 +124,16 @@ public final class VirtualDevice implements AutoCloseable {
     public SimulationState state() {
         Reading truth = plant.current();
         return new SimulationState(
-                truth.humidity(), truth.temperature(), fault, speed, waterings, lastWatered, clock.instant());
+                truth.humidity(),
+                truth.temperature(),
+                plant.health(),
+                plant.growth(),
+                plant.isAlive(),
+                fault,
+                speed,
+                waterings,
+                lastWatered,
+                clock.instant());
     }
 
     // --- the telemetry loop -----------------------------------------------------------------
@@ -133,7 +142,7 @@ public final class VirtualDevice implements AutoCloseable {
     void tick() {
         Reading truth = plant.next();
         Reading reading = fault.apply(truth, lastReported);
-        metrics.tick(deviceId, truth, reading, fault, speed);
+        metrics.tick(deviceId, truth, reading, fault, speed, plant);
         try {
             if (reading == null) {
                 log.info("{}: sensor silent (true humidity {})", deviceId, format(truth.humidity()));

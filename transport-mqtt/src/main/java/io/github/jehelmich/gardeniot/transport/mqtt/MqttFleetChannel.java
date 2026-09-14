@@ -24,6 +24,7 @@ final class MqttFleetChannel implements FleetChannel {
                 .topicFilter(settings.topics().fleetCommandsShared())
                 .qos(MqttClients.QOS)
                 .callback(responder::onRequest)
+                .executor(MqttClients.CALLBACKS)
                 .send()
                 .get(30, TimeUnit.SECONDS);
     }

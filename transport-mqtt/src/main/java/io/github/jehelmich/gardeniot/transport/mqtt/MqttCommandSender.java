@@ -5,7 +5,7 @@ import com.hivemq.client.mqtt.mqtt5.message.publish.Mqtt5Publish;
 import io.github.jehelmich.gardeniot.telemetry.Json;
 import io.github.jehelmich.gardeniot.transport.CommandException;
 import io.github.jehelmich.gardeniot.transport.CommandResult;
-import io.github.jehelmich.gardeniot.transport.DeviceCommandSender;
+import io.github.jehelmich.gardeniot.transport.FleetCommandSender;
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.UUID;
@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory;
  * device that is offline simply never answers, which surfaces as a timeout — the same
  * experience as a direct method to a disconnected IoT Hub device.
  */
-public final class MqttCommandSender implements DeviceCommandSender, AutoCloseable {
+public final class MqttCommandSender implements FleetCommandSender, AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(MqttCommandSender.class);
 
@@ -45,6 +45,7 @@ public final class MqttCommandSender implements DeviceCommandSender, AutoCloseab
                 .topicFilter(topics.reply(clientId))
                 .qos(MqttClients.QOS)
                 .callback(this::onReply)
+                .executor(MqttClients.CALLBACKS)
                 .send()
                 .get(30, TimeUnit.SECONDS);
         return this;
@@ -55,7 +56,7 @@ public final class MqttCommandSender implements DeviceCommandSender, AutoCloseab
         return request(topics.command(deviceId, command), command, payload);
     }
 
-    /** Sends a command to the fleet rather than to one device. */
+    @Override
     public CommandResult sendToFleet(String command, Object payload) throws CommandException {
         return request(topics.fleetCommand(command), command, payload);
     }

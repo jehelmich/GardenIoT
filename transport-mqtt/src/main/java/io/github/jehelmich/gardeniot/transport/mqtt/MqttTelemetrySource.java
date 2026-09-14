@@ -38,6 +38,7 @@ public final class MqttTelemetrySource implements TelemetrySource {
                 .topicFilter(topics.allTelemetry())
                 .qos(MqttClients.QOS)
                 .callback(publish -> decode(publish).ifPresent(onTelemetry))
+                .executor(MqttClients.CALLBACKS)
                 .send()
                 .get(30, TimeUnit.SECONDS);
         log.info("Subscribed to {}", topics.allTelemetry());

@@ -80,6 +80,29 @@ class PlantSimulationTest {
     }
 
     @Test
+    void aWateredPlantGrowsAndAParchedOneDies() {
+        PlantSimulation plant = new PlantSimulation(15.0, 15.0, new Random(SEED));
+        plant.water();
+        double growthBefore = plant.growth();
+
+        IntStream.range(0, 200).forEach(i -> plant.next());
+
+        assertThat(plant.health()).isGreaterThan(PlantSimulation.INITIAL_HEALTH);
+        assertThat(plant.growth()).isGreaterThan(growthBefore);
+        assertThat(plant.isAlive()).isTrue();
+
+        // Now leave it: the soil dries below the parched line and health drains to zero.
+        IntStream.range(0, 2_000).forEach(i -> plant.next());
+
+        assertThat(plant.current().humidity()).isLessThan(PlantSimulation.PARCHED_HUMIDITY);
+        assertThat(plant.isAlive()).isFalse();
+        double growthAtDeath = plant.growth();
+        plant.water();
+        IntStream.range(0, 200).forEach(i -> plant.next());
+        assertThat(plant.growth()).as("a dead plant does not grow back").isEqualTo(growthAtDeath);
+    }
+
+    @Test
     void rejectsAnImpossibleMinimumHumidity() {
         assertThatIllegalArgumentException().isThrownBy(() -> new PlantSimulation(15.0, 101.0, new Random(SEED)));
     }

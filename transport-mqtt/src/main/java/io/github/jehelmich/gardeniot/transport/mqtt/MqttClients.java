@@ -6,6 +6,8 @@ import com.hivemq.client.mqtt.mqtt5.Mqtt5AsyncClient;
 import com.hivemq.client.mqtt.mqtt5.Mqtt5ClientBuilder;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.slf4j.Logger;
@@ -17,6 +19,15 @@ final class MqttClients {
     private static final Logger log = LoggerFactory.getLogger(MqttClients.class);
 
     static final MqttQos QOS = MqttQos.AT_LEAST_ONCE;
+
+    /**
+     * Where subscription callbacks run. The client would otherwise invoke them on its own network
+     * thread, and a callback that then waits for a publish — a device reporting state from inside
+     * a command, a fleet process connecting a new plant — would be waiting for the very thread it
+     * occupies. Virtual threads make blocking there free.
+     */
+    static final Executor CALLBACKS = Executors.newVirtualThreadPerTaskExecutor();
+
     private static final long CONNECT_TIMEOUT_SECONDS = 30;
 
     private MqttClients() {}

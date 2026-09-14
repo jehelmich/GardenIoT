@@ -39,7 +39,7 @@ jobs:
       - name: Push versioned images
         run: |
           version="${GITHUB_REF_NAME#v}"
-          for module in controller simulated-device; do
+          for module in controller simulated-device garden-ui; do
             docker buildx build --push --platform linux/amd64,linux/arm64 \
               --build-arg MODULE="$module" \
               -t "$IMAGE_PREFIX-$module:$version" -t "$IMAGE_PREFIX-$module:latest" .
@@ -56,7 +56,7 @@ jobs:
             echo
             echo "## Images"
             echo '```'
-            for module in controller simulated-device; do echo "$IMAGE_PREFIX-$module:${GITHUB_REF_NAME#v}"; done
+            for module in controller simulated-device garden-ui; do echo "$IMAGE_PREFIX-$module:${GITHUB_REF_NAME#v}"; done
             echo '```'
           } > notes.md
 
@@ -66,3 +66,4 @@ jobs:
           files: |
             controller/target/controller.jar
             simulated-device/target/simulated-device.jar
+            garden-ui/target/garden-ui.jar
