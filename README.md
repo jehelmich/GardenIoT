@@ -16,10 +16,12 @@ docker compose up --build        # then open http://localhost:3000
 
 ![The garden page: three plants, one thriving, two dead behind broken sensors](docs/images/garden-ui.png)
 
-*The garden page at <http://localhost:8088>, 25× speed. Basil is thriving after
-three waterings. Mint's humidity sensor was frozen at 96 % with the sensor
-control; the controller, trusting it, never watered again and the plant died at
-15 % real humidity. Thyme's sensor went silent with the same result.*
+*The garden page at <http://localhost:8088>, 25× speed, live weather from
+Lisbon. Every species has its own comfort band (the green stripe) and the
+controller waters each at its own threshold — the lavender is perfectly happy
+at 17 %. Mint's sensor was frozen halfway through and repaired by the
+technician in time. The prickly pear was watered twice by hand and died of
+root rot.*
 
 ![Grafana dashboard: reported vs. true soil humidity, waterings, sensor faults](docs/images/grafana.png)
 
@@ -44,14 +46,19 @@ A hobby project from July 2017, rebuilt in 2026 as a portfolio piece. See
          └──────────────▶  Prometheus  ──▶  Grafana  ◀─────────────┘
 ```
 
-1. Every few seconds each **device** advances its `PlantSimulation` (temperature
-   wanders, soil dries a little faster when warm), reads its sensor and publishes
-   a JSON reading. The sensor can be broken on command — stuck, over-reading or
-   silent — while the plant keeps drying underneath.
-2. The **controller** subscribes to every device's telemetry and hands each
-   reading to a `WateringPolicy`: below the threshold, water — but not more than
-   once per cooldown, because the next few readings still show dry soil while
-   the pump runs.
+1. Every few seconds each **device** advances its `PlantSimulation` — soil dries
+   with temperature, species and weather; rain puts water back — reads its
+   sensor and publishes a JSON reading. The plant has a species with real needs
+   (a basil, a fern and a cactus want very different soil), health and growth;
+   it dies of thirst, root rot, frost or heat. The sensor can be broken on
+   command — stuck, over-reading or silent — while the plant keeps drying
+   underneath; a technician can be sent to replace it.
+2. Each device reports its **watering profile** as state — a reported property
+   on the IoT Hub device twin, a retained topic on MQTT. The **controller**
+   subscribes to every device's telemetry, looks the profile up, and hands each
+   reading to a `WateringPolicy`: below *that plant's* threshold, water — but not
+   more than once per cooldown, because the next readings still show dry soil
+   while the pump runs.
 3. The controller sends the `water` **command**. The device acknowledges with
    `202 Accepted`, runs the pump on a background thread, soaks the soil, and
    reports `lastWater` as device state. Direct method on IoT Hub, request/response
@@ -61,9 +68,11 @@ A hobby project from July 2017, rebuilt in 2026 as a portfolio piece. See
    dashboard shows a lying sensor.
 5. The **garden page** watches the same broker and renders every plant live:
    it grows while the soil is comfortably damp, wilts as its health drains, and
-   dies when it reaches zero. From the page you can water, break or repair a
-   sensor, add plants, and run the whole simulation up to 100× — a small game
-   that shows what the loop does, and what it cannot know.
+   dies when it reaches zero. From the page you can water, break a sensor, call
+   the technician, repot, add species, set the weather — fixed, changing, or
+   live from any place on Earth via Open-Meteo — and run the whole simulation
+   up to 50×. A small game that shows what the loop does, and what it cannot
+   know.
 
 The applications talk to *ports* (`DeviceTransport`, `TelemetrySource`,
 `DeviceCommandSender`); `transport-mqtt` and `transport-azure` are the adapters.
@@ -107,9 +116,10 @@ Brings up Mosquitto, the controller, a device process hosting `basil` and
 Everything the page does is also a plain MQTT 5 request you can send yourself:
 
 ```sh
-# 25x speed, then break mint's sensor
-docker compose exec mosquitto mosquitto_pub -t garden/basil/cmd/setSpeed -m '{"factor":25}'
-docker compose exec mosquitto mosquitto_pub -t garden/mint/cmd/fault    -m '{"type":"STUCK"}'
+# 25x speed, break mint's sensor, make it rain
+docker compose exec mosquitto mosquitto_pub -t garden/basil/cmd/setSpeed   -m '{"factor":25}'
+docker compose exec mosquitto mosquitto_pub -t garden/mint/cmd/fault       -m '{"type":"STUCK"}'
+docker compose exec mosquitto mosquitto_pub -t garden/mint/cmd/setWeather  -m '{"mode":"rain"}'
 
 # a third device process with its own plant
 docker compose run -d -e DEVICE_IDS=thyme device
@@ -167,6 +177,8 @@ in this repository.
 | `PLANT_NAMES`, `PLANT_INDEX` | device | For replicas: this replica hosts `PLANT_NAMES[PLANT_INDEX]` |
 | `TELEMETRY_INTERVAL_SECONDS` | device | Seconds between readings at speed 1; default `5` |
 | `ACTION_DURATION_SECONDS` | device | How long the pump and a reboot take at speed 1; default `5` |
+| `WEATHER` | device | `clear`, `rain`, `drought`, `heatwave`, `cold`, `auto` (changes by itself) or `real`; default `clear`, compose uses `auto` |
+| `WEATHER_LATITUDE`, `WEATHER_LONGITUDE`, `WEATHER_PLACE` | device | Where `real` weather is fetched for (Open-Meteo, no key) |
 | `UI_PORT` | garden-ui | Port of the page (with `/metrics` and health on it); default `8080`, compose maps it to 8088 |
 
 MQTT transport:
@@ -196,19 +208,24 @@ taken from it) and optionally `IOTHUB_DEVICE_PROTOCOL` (`MQTT`, `MQTT_WS`,
 
 | Command | Payload | Effect |
 |---|---|---|
-| `water` | – | `202`; runs the pump, soaks the soil, reports `lastWater` |
+| `water` | – | `202`; runs the pump, adds a dose to the soil |
 | `reboot` | – | `202`; restarts, reports `lastReboot` |
+| `repairSensor` | – | `202`; a technician recalibrates or replaces the sensor after a while (`409` if a job is under way) |
+| `repot` | – | `202`; a fresh seedling of the same species (`409` if a job is under way) |
 | `setSpeed` | `{"factor": 25}` | Runs the simulation faster (0.1–100×) |
 | `fault` | `{"type": "STUCK"}` | `NONE`, `STUCK`, `OVERREAD` or `SILENT` sensor |
-| `status` | – | The simulator's view: true humidity, fault, speed, waterings |
+| `setWeather` | `{"mode": "rain"}` or `{"mode": "real", "latitude": 38.7, "longitude": -9.1, "place": "Lisbon"}` | Fixed, `auto`, or live weather |
+| `status` | – | The simulator's view: species, true humidity, health, growth, weather, jobs, waterings |
 
-Fleet commands (MQTT only, any device process picks them up): `addPlant`,
-`removePlant`, `listPlants` with `{"deviceId": "thyme"}`.
+Fleet commands (MQTT only, any device process picks them up): `addPlant`
+(`{"deviceId": "thyme", "profile": "cactus"}` — a plant named after a species
+becomes that species), `removePlant`, `listPlants`, `listProfiles`.
 
-The garden page wraps the same commands in a JSON API: `POST /api/plants`,
-`DELETE /api/plants/{id}`, `POST /api/plants/{id}/commands/{name}`,
-`POST /api/speed`; `GET /events` is the server-sent event stream the page
-renders from.
+The garden page wraps the same commands in a JSON API: `GET /api/profiles`,
+`POST /api/plants`, `DELETE /api/plants/{id}`,
+`POST /api/plants/{id}/commands/{name}`, `POST /api/speed`, `POST /api/weather`
+(a place name is geocoded first); `GET /events` is the server-sent event stream
+the page renders from.
 
 ## Engineering notes
 
@@ -218,6 +235,9 @@ renders from.
   makes the unit tests hub-free.
 - **The wire contract is a record.** `Telemetry` in `common` is serialised and
   parsed with one codec that rejects malformed and out-of-range documents.
+- **Per-device configuration lives on the twin.** A plant's needs travel as a
+  reported property (`WateringProfile`), and the controller reads them through
+  a port — the same shape on IoT Hub (twin) and MQTT (retained topic).
 - **Identity over secrets.** On Azure the service side uses `DefaultAzureCredential`
   — managed identity in the cloud, the developer's login locally — with
   connection strings only as a fallback. Device identity comes from what the
@@ -235,9 +255,15 @@ renders from.
 
 ## Status
 
+The 2017 version ran against a real IoT Hub with physical sensors on the
+device. This repository's simulated device stands in for that hardware — same
+message contract, same commands — so that the whole system can be run and
+demonstrated anywhere; a real sensor would plug in behind `PlantSimulation`'s
+`Reading`.
+
 Verified: the build, unit and integration tests; the compose stack including
-the garden page; the Helm chart on kind, with metrics scraped in-cluster; the
-MQTT transport end to end.
+the garden page and live weather; the Helm chart on kind, with metrics scraped
+in-cluster; the MQTT transport end to end.
 The Azure transport compiles against the current SDKs, its settings are unit
 tested, and the Terraform configuration validates — but neither has been run
 against a live subscription since the 2017 original. That is the next thing to

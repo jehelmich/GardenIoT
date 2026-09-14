@@ -22,6 +22,7 @@ transports and choose at start-up; neither application class imports an SDK type
 | `CommandHandler` → `CommandResult` | device | request on `…/cmd/{name}`, reply on the request's response topic with its correlation data | direct method callback |
 | `DeviceTransport.reportState` | device | retained `…/state/{name}` | reported twin property |
 | `FleetChannel` | device | shared subscription `$share/fleet/…/_fleet/cmd/+` | not offered: hub devices must be registered |
+| `DeviceProfileSource` | cloud | cache of retained `…/state/profile` topics | `TwinClient.get` → reported property `profile`, cached |
 | `TelemetrySource` | cloud | subscription on `…/+/telemetry` | `EventHubConsumerAsyncClient` on the built-in endpoint |
 | `DeviceCommandSender` | cloud | request/response with a per-client reply topic | `DirectMethodsClient.invoke` |
 
@@ -44,11 +45,12 @@ garden/_reply/{clientId}            command replies for one cloud-side client
 
 ```
 DeviceApp ──▶ DeviceFleet ──▶ VirtualDevice ×N
-                 │                 ├── PlantSimulation   (truth)
+                 │                 ├── PlantSimulation   (truth: species profile, health, growth)
+                 │                 ├── WeatherProvider   (fixed / auto / Open-Meteo)
                  │                 ├── SensorFault       (what gets reported)
                  │                 ├── DeviceCommands    (CommandHandler)
                  │                 └── DeviceTransport
-                 └── FleetChannel (addPlant / removePlant / listPlants)
+                 └── FleetChannel (addPlant / removePlant / listPlants / listProfiles)
 ```
 
 Each `VirtualDevice` reschedules its own telemetry tick, so `setSpeed` takes
@@ -61,7 +63,8 @@ and exposes the same as gauges, which is how observers can see a sensor lie.
 
 ```
 TelemetrySource ──▶ TelemetryProcessor ──▶ WateringPolicy ──▶ WateringActuator ──▶ DeviceCommandSender
-                          │                     (threshold, per-device cooldown, injected Clock)
+                          │      ▲                (per-plant threshold, cooldown, injected Clock)
+                          │      └── DeviceProfileSource (what each plant said it needs)
                           └──▶ ControllerMetrics
 ```
 
