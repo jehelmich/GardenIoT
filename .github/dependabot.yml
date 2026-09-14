@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      azure:
+        patterns: ["com.azure*", "com.microsoft.azure*"]
+      maven-plugins:
+        patterns: ["org.apache.maven.plugins:*"]
+      test:
+        patterns: ["org.junit*", "org.assertj*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
