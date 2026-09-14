@@ -1,149 +1,222 @@
 # GardenIoT
 
-Automatic plant watering on [Azure IoT Hub](https://learn.microsoft.com/azure/iot-hub/):
-a garden device reports soil humidity, a cloud-side controller watches the
-telemetry stream and tells the device to run its pump when the soil gets dry.
+[![CI](https://github.com/jehelmich/GardenIoT/actions/workflows/ci.yml/badge.svg)](https://github.com/jehelmich/GardenIoT/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/jehelmich/GardenIoT/actions/workflows/codeql.yml/badge.svg)](https://github.com/jehelmich/GardenIoT/actions/workflows/codeql.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-The device here is simulated — a small model of a pot drying out in the sun —
-so the whole loop runs on a laptop against a free-tier hub. Everything that
-talks to the hub is real: device-to-cloud messages, direct methods, and
-reported properties on the device twin.
+Automatic plant watering as a small, complete IoT system: simulated garden devices
+report soil humidity, a cloud-side controller watches the stream and commands the
+pump when a plant gets dry. It runs on a laptop with one command, on Kubernetes
+with a Helm chart, or on Azure IoT Hub with Terraform — same code, different
+transport.
 
-A hobby project from July 2017, brought up to date in 2026: current Azure
-SDKs, Java 21, a multi-module Maven build with tests and CI. See
-[Status](#status).
+```sh
+docker compose up --build        # then open http://localhost:3000
+```
+
+![Grafana dashboard: reported vs. true soil humidity, waterings, sensor faults](docs/images/grafana.png)
+
+*Two plants at 25× simulation speed. Basil dries out and gets watered in a
+sawtooth. Mint's humidity sensor was frozen with the `fault` command halfway
+through: the controller keeps seeing 96 % (solid line) while the soil is
+actually bone dry (dashed) — and, trusting its sensor, never waters it again.*
+
+A hobby project from July 2017, rebuilt in 2026 as a portfolio piece. See
+[Status](#status) for what has and has not been verified.
 
 ## How it works
 
 ```
- ┌──────────────────────┐   telemetry (MQTT)    ┌──────────────┐   Event Hub-compatible   ┌──────────────┐
- │   simulated-device   │ ────────────────────▶ │              │ ───────────────────────▶ │  controller  │
- │                      │                       │  Azure       │        endpoint          │              │
- │  PlantSimulation     │   direct method       │  IoT Hub     │   direct method          │ Watering-    │
- │  DirectMethodHandler │ ◀──────────────────── │              │ ◀─────────────────────── │ Policy       │
- │                      │   "water"             │              │   "water"                │              │
- └──────────┬───────────┘                       └──────────────┘                          └──────────────┘
-            │  reported property: lastWater = <timestamp>
-            └───────────────────────────────────────▶  device twin
+                 telemetry                          telemetry
+   ┌────────────┐ ───────▶ ┌─────────────────────┐ ───────▶ ┌────────────┐
+   │  device(s) │          │  transport           │          │ controller │
+   │            │ ◀─────── │  MQTT broker  - or - │ ◀─────── │            │
+   │ Plant-     │ commands │  Azure IoT Hub       │ commands │ Watering-  │
+   │ Simulation │          └─────────────────────┘          │ Policy     │
+   └─────┬──────┘                                            └─────┬──────┘
+         │ /metrics                                                │ /metrics
+         └──────────────▶  Prometheus  ──▶  Grafana  ◀─────────────┘
 ```
 
-1. Every five seconds the **device** takes a reading from `PlantSimulation`
-   (temperature does a small random walk; humidity evaporates a little on
-   each step) and publishes it as a JSON message:
+1. Every few seconds each **device** advances its `PlantSimulation` (temperature
+   wanders, soil dries a little faster when warm), reads its sensor and publishes
+   a JSON reading. The sensor can be broken on command — stuck, over-reading or
+   silent — while the plant keeps drying underneath.
+2. The **controller** subscribes to every device's telemetry and hands each
+   reading to a `WateringPolicy`: below the threshold, water — but not more than
+   once per cooldown, because the next few readings still show dry soil while
+   the pump runs.
+3. The controller sends the `water` **command**. The device acknowledges with
+   `202 Accepted`, runs the pump on a background thread, soaks the soil, and
+   reports `lastWater` as device state. Direct method on IoT Hub, request/response
+   over MQTT 5 — the application code does not know which.
+4. Both processes expose Prometheus metrics. The device also exposes the
+   simulator's **ground truth** next to what its sensor claimed, which is how the
+   dashboard shows a lying sensor.
 
-   ```json
-   {"deviceId":"garden-1","timestamp":"2017-07-17T10:15:30Z","temperature":22.4,"humidity":31.9}
-   ```
-
-2. The **controller** reads every partition of the hub's built-in Event
-   Hub-compatible endpoint, starting from now, and hands each message to a
-   `WateringPolicy`. When humidity drops below the threshold (25 % by default)
-   the policy says water — but not more than once per cooldown, because the
-   pump takes a while and the next few readings still show dry soil.
-
-3. The controller invokes the `water` **direct method** on that device. The
-   device acknowledges with `202 Accepted`, runs the pump on a background
-   thread, soaks the simulated soil to 100 %, and records `lastWater` as a
-   **reported property** on its twin. A `reboot` method works the same way.
-
-The message format is the one contract between the two halves, so it lives
-in a shared `common` module as a Java record with its Gson codec.
+The applications talk to *ports* (`DeviceTransport`, `TelemetrySource`,
+`DeviceCommandSender`); `transport-mqtt` and `transport-azure` are the adapters.
+`TRANSPORT=mqtt|azure` picks one at start-up. Details and the reasons behind the
+design are in [docs/architecture.md](docs/architecture.md) and the
+[decision records](docs/adr/).
 
 ## Repository layout
 
 ```
-common/            Telemetry record + JSON codec; typed access to environment variables
-simulated-device/  DeviceApp — telemetry loop, direct method handler, plant model
-controller/        ControllerApp — Event Hub consumer, watering policy, direct method invoker
-.github/           CI workflow and Dependabot configuration
+common/            Telemetry contract, transport ports, configuration and metrics helpers
+transport-mqtt/    MQTT 5 adapter (HiveMQ client): topics, request/response, last will, fleet channel
+transport-azure/   Azure IoT Hub adapter: Entra ID or connection strings, direct methods, twins
+simulated-device/  A fleet of virtual plants with sensor faults and runtime speed control
+controller/        The watering loop
+integration-tests/ The loop end to end against Mosquitto in Testcontainers
+deploy/helm/       Helm chart; also the source of the broker, Prometheus and Grafana config
+deploy/terraform/  Azure: IoT Hub, managed identity, Container Apps
+scripts/           kind-up.sh, kind-down.sh, deploy-azure.sh
+docs/              Architecture, decision records, images
 ```
-
-Each application module builds a runnable fat jar.
 
 ## Running it
 
-You need a JDK 21 or newer and an Azure IoT Hub with one registered device
-(the free F1 tier is enough). Maven is fetched by the wrapper.
+### On a laptop (Docker Compose)
 
 ```sh
-./mvnw verify          # compile, run the tests, package both jars
+docker compose up --build
 ```
 
-Configuration is passed through the environment; nothing secret is ever
-written to a file in this repository.
+Brings up Mosquitto, the controller, a device process hosting `basil` and
+`mint`, Prometheus and Grafana. Grafana is at <http://localhost:3000> (no login,
+dashboard provisioned), Prometheus at <http://localhost:9090>. Watch the loop in
+the logs, or poke at the devices directly — commands are plain MQTT 5 requests:
 
-| Variable | Used by | Meaning |
+```sh
+# 25x speed, then break mint's sensor
+docker compose exec mosquitto mosquitto_pub -t garden/basil/cmd/setSpeed -m '{"factor":25}'
+docker compose exec mosquitto mosquitto_pub -t garden/mint/cmd/fault    -m '{"type":"STUCK"}'
+
+# a third device process with its own plant
+docker compose run -d -e DEVICE_IDS=thyme device
+```
+
+### On Kubernetes (kind + Helm)
+
+```sh
+scripts/kind-up.sh      # builds images, creates a kind cluster, installs deploy/helm/gardeniot
+scripts/kind-down.sh
+```
+
+The chart runs devices as a StatefulSet (pod *N* hosts `device.plants[N]`),
+the controller as a single-replica Deployment, and optionally Prometheus and
+Grafana. Pods run as non-root with a read-only root filesystem; liveness and
+readiness probes use `/healthz` and `/readyz`. Every value, including the Azure
+profile, is documented in [`values.yaml`](deploy/helm/gardeniot/values.yaml).
+
+### On Azure (Terraform)
+
+```sh
+az login
+scripts/deploy-azure.sh           # IoT Hub (free tier), managed identity, two Container Apps
+scripts/deploy-azure.sh destroy
+```
+
+The controller authenticates to the hub with a managed identity and Entra ID
+roles — there is no key anywhere in its configuration. The device, like a real
+one, uses its own device credential. See
+[deploy/terraform/azure/README.md](deploy/terraform/azure/README.md).
+
+### From source
+
+JDK 21 or newer; Maven comes with the wrapper.
+
+```sh
+./mvnw verify                 # format check, unit tests, integration tests (needs Docker), jars
+./mvnw verify -DskipITs       # without Docker
+java -jar controller/target/controller.jar
+java -jar simulated-device/target/simulated-device.jar
+```
+
+## Configuration
+
+Everything comes from the environment. Connection strings never live in a file
+in this repository.
+
+| Variable | Process | Meaning |
 |---|---|---|
-| `IOTHUB_DEVICE_CONNECTION_STRING` | device | The device's connection string (`HostName=…;DeviceId=…;SharedAccessKey=…`). The device id is taken from it. |
-| `TELEMETRY_INTERVAL_SECONDS` | device | Seconds between readings. Default `5`. |
-| `ACTION_DURATION_SECONDS` | device | How long the simulated pump / reboot takes. Default `5`. |
-| `EVENTHUB_COMPATIBLE_CONNECTION_STRING` | controller | Connection string of the hub's built-in endpoint (*Hub-level settings → Built-in endpoints*), including `EntityPath`. |
-| `EVENTHUB_CONSUMER_GROUP` | controller | Consumer group to read from. Default `$Default`. |
-| `IOTHUB_SERVICE_CONNECTION_STRING` | controller | A shared access policy with *service connect* permission, for invoking direct methods. |
-| `HUMIDITY_THRESHOLD` | controller | Water below this soil humidity, in percent. Default `25`. |
-| `WATERING_COOLDOWN_SECONDS` | controller | Minimum time between two watering commands to the same device. Default `60`. |
+| `TRANSPORT` | both | `mqtt` (default) or `azure` |
+| `METRICS_PORT` | both | Port for `/metrics`, `/healthz`, `/readyz`; default `8080`, `0` disables |
+| `HUMIDITY_THRESHOLD` | controller | Water below this soil humidity in percent; default `25` |
+| `WATERING_COOLDOWN_SECONDS` | controller | Minimum time between two watering commands to one device; default `60` |
+| `DEVICE_IDS` | device | Comma-separated plants to host; default: one named after the machine |
+| `PLANT_NAMES`, `PLANT_INDEX` | device | For replicas: this replica hosts `PLANT_NAMES[PLANT_INDEX]` |
+| `TELEMETRY_INTERVAL_SECONDS` | device | Seconds between readings at speed 1; default `5` |
+| `ACTION_DURATION_SECONDS` | device | How long the pump and a reboot take at speed 1; default `5` |
 
-Start the controller first so it sees the device's messages from the start,
-then the device, each in its own terminal:
+MQTT transport:
 
-```sh
-export EVENTHUB_COMPATIBLE_CONNECTION_STRING='Endpoint=sb://…'
-export IOTHUB_SERVICE_CONNECTION_STRING='HostName=…;SharedAccessKeyName=service;SharedAccessKey=…'
-java -jar controller/target/controller-1.0.0-SNAPSHOT.jar
-```
+| Variable | Meaning |
+|---|---|
+| `MQTT_HOST`, `MQTT_PORT` | Broker; default `localhost:1883` |
+| `MQTT_TLS`, `MQTT_USERNAME`, `MQTT_PASSWORD` | Optional TLS and credentials |
+| `MQTT_TOPIC_PREFIX` | First topic segment; default `garden` |
+| `MQTT_COMMAND_TIMEOUT_SECONDS` | How long the controller waits for a device to answer; default `10` |
 
-```sh
-export IOTHUB_DEVICE_CONNECTION_STRING='HostName=…;DeviceId=garden-1;SharedAccessKey=…'
-java -jar simulated-device/target/simulated-device-1.0.0-SNAPSHOT.jar
-```
+Azure transport, controller — Entra ID (preferred) or connection strings:
 
-With the defaults the soil starts at 26 % and crosses the threshold within a
-few readings, so the first watering happens in about half a minute:
+| Variable | Meaning |
+|---|---|
+| `AZURE_IOTHUB_HOSTNAME` | `<hub>.azure-devices.net`; authenticates with `DefaultAzureCredential` |
+| `AZURE_EVENTHUB_NAMESPACE`, `AZURE_EVENTHUB_NAME` | The built-in endpoint, likewise |
+| `IOTHUB_SERVICE_CONNECTION_STRING` | Fallback: shared access policy with *service connect* |
+| `EVENTHUB_COMPATIBLE_CONNECTION_STRING` | Fallback: connection string of the built-in endpoint |
+| `EVENTHUB_CONSUMER_GROUP` | Default `$Default` |
 
-```
-10:15:30.412 INFO ControllerApp - Watching 'garden-hub' on consumer group '$Default'; watering below 25.0% humidity. Press Ctrl-C to stop.
-10:15:41.007 INFO TelemetryProcessor - garden-1: temperature=22.1°C humidity=25.8%
-10:15:46.012 INFO TelemetryProcessor - garden-1: temperature=22.0°C humidity=25.5%
-10:15:51.010 INFO TelemetryProcessor - garden-1: temperature=22.1°C humidity=25.3%
-10:15:56.014 INFO TelemetryProcessor - garden-1: temperature=22.2°C humidity=25.1%
-10:16:01.011 INFO TelemetryProcessor - garden-1: temperature=22.2°C humidity=24.9%
-10:16:01.011 INFO TelemetryProcessor - garden-1: soil is dry, requesting watering
-10:16:01.013 INFO DirectMethodWateringActuator - Invoking 'water' on device 'garden-1'
-10:16:01.388 INFO DirectMethodWateringActuator - Device 'garden-1' answered 202 {"message":"Started watering"}
-10:16:06.015 INFO TelemetryProcessor - garden-1: temperature=22.3°C humidity=24.6%
-10:16:11.012 INFO TelemetryProcessor - garden-1: temperature=22.3°C humidity=99.8%
-```
+Azure transport, device: `IOTHUB_DEVICE_CONNECTION_STRING` (the device id is
+taken from it) and optionally `IOTHUB_DEVICE_PROTOCOL` (`MQTT`, `MQTT_WS`,
+`AMQPS`, `AMQPS_WS`).
 
-Both programs run until interrupted with Ctrl-C.
+## Commands a device understands
 
-## Design notes
+| Command | Payload | Effect |
+|---|---|---|
+| `water` | – | `202`; runs the pump, soaks the soil, reports `lastWater` |
+| `reboot` | – | `202`; restarts, reports `lastReboot` |
+| `setSpeed` | `{"factor": 25}` | Runs the simulation faster (0.1–100×) |
+| `fault` | `{"type": "STUCK"}` | `NONE`, `STUCK`, `OVERREAD` or `SILENT` sensor |
+| `status` | – | The simulator's view: true humidity, fault, speed, waterings |
 
-- **One wire contract.** `Telemetry` is a record in `common`; the device
-  serialises it and the controller parses it with the same codec, which
-  rejects malformed and out-of-range documents instead of passing them on.
-- **Testable seams.** The classes that do the work — `PlantSimulation`,
-  `DirectMethodHandler`, `TelemetryPublisher`, `WateringPolicy`,
-  `TelemetryProcessor` — depend on small interfaces (`TelemetrySink`,
-  `PropertyReporter`, `WateringActuator`) and an injected `Clock`, so the
-  unit tests run without a hub and without sleeping.
-- **Defensive by default.** A message that cannot be parsed, a twin update
-  that fails, or a device that rejects a command is logged and skipped; it
-  never takes down the loop. Direct methods are acknowledged immediately and
-  executed off the callback thread.
-- **Clean lifecycle.** Both entry points register a shutdown hook, close their
-  clients on SIGINT/SIGTERM, and the controller exits non-zero if the receive
-  link fails for good rather than idling on the SDK's reactor threads.
-- **No secrets in git.** Configuration comes from the environment and is
-  validated up front with a one-line error, not a stack trace.
+Fleet commands (MQTT only, any device process picks them up): `addPlant`,
+`removePlant`, `listPlants` with `{"deviceId": "thyme"}`.
+
+## Engineering notes
+
+- **Ports and adapters, for a reason.** The original IoT Hub deployment is long
+  gone; putting the transports behind three small interfaces is what lets the
+  same loop run against Mosquitto on a laptop and IoT Hub in Azure, and what
+  makes the unit tests hub-free.
+- **The wire contract is a record.** `Telemetry` in `common` is serialised and
+  parsed with one codec that rejects malformed and out-of-range documents.
+- **Identity over secrets.** On Azure the service side uses `DefaultAzureCredential`
+  — managed identity in the cloud, the developer's login locally — with
+  connection strings only as a fallback. Device identity comes from what the
+  broker asserts (hub system property, MQTT topic), not from the message body.
+- **Defensive loop.** Unreadable messages, failed twin updates and rejected
+  commands are logged and skipped; long commands are acknowledged at once and
+  executed off the callback thread. Both entry points shut down cleanly and the
+  controller exits non-zero if its stream dies.
+- **Tests at three levels.** Unit tests with injected clocks and fakes;
+  integration tests that run the loop against a real broker; a CI smoke test
+  that installs the chart on kind and waits for the first watering.
+- **Supply chain.** Formatting enforced, coverage reported, CodeQL and Trivy in
+  the Security tab, multi-arch images signed with Sigstore, Dependabot on Maven,
+  Actions and base images.
 
 ## Status
 
-The 2017 version was developed against a real IoT Hub; the intended follow-up,
-replacing the simulation with physical sensors, never happened. The 2026
-revision was verified as far as it can be without a hub: the build and unit
-tests pass, both jars start, read their configuration, and fail cleanly
-against unreachable or unauthorised endpoints. The direct-method round trip
-has not been re-run end to end against a live hub since the SDK migration.
+Verified: the build, unit and integration tests; the compose stack; the Helm
+chart on kind, with metrics scraped in-cluster; the MQTT transport end to end.
+The Azure transport compiles against the current SDKs, its settings are unit
+tested, and the Terraform configuration validates — but neither has been run
+against a live subscription since the 2017 original. That is the next thing to
+do with a free-tier hub.
 
 ## License
 
