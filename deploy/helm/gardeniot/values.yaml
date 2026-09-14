@@ -72,7 +72,7 @@ serviceAccount:
 monitoring:
   enabled: true
   prometheus:
-    image: prom/prometheus:v3.13.3
+    image: prom/prometheus:v3.14.0
     retention: 2d
     resources:
       requests: {cpu: 50m, memory: 256Mi}
