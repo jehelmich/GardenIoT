@@ -20,8 +20,10 @@ import java.time.format.DateTimeParseException;
  */
 public final class TelemetryCodec {
 
+    static final TypeAdapter<Instant> INSTANT_ADAPTER = new InstantAdapter().nullSafe();
+
     private static final Gson GSON = new GsonBuilder()
-            .registerTypeAdapter(Instant.class, new InstantAdapter().nullSafe())
+            .registerTypeAdapter(Instant.class, INSTANT_ADAPTER)
             .disableHtmlEscaping()
             .create();
 

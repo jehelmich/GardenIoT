@@ -12,7 +12,7 @@
 
   <artifactId>simulated-device</artifactId>
   <name>GardenIoT :: Simulated Device</name>
-  <description>Simulated soil sensor that streams telemetry to IoT Hub and reacts to direct methods.</description>
+  <description>A fleet of simulated soil sensors that stream telemetry and react to commands.</description>
 
   <properties>
     <mainClass>io.github.jehelmich.gardeniot.device.DeviceApp</mainClass>
@@ -25,8 +25,14 @@
       <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>com.microsoft.azure.sdk.iot</groupId>
-      <artifactId>iot-device-client</artifactId>
+      <groupId>io.github.jehelmich.gardeniot</groupId>
+      <artifactId>transport-azure</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.github.jehelmich.gardeniot</groupId>
+      <artifactId>transport-mqtt</artifactId>
+      <version>${project.version}</version>
     </dependency>
   </dependencies>
 

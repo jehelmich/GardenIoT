@@ -1,7 +1,7 @@
 package io.github.jehelmich.gardeniot.controller;
 
 import io.github.jehelmich.gardeniot.telemetry.Telemetry;
-import io.github.jehelmich.gardeniot.telemetry.TelemetryCodec;
+import io.github.jehelmich.gardeniot.transport.CommandException;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
@@ -22,36 +22,30 @@ class TelemetryProcessorTest {
     private final WateringPolicy policy = new WateringPolicy(25.0, Duration.ofMinutes(1), Clock.fixed(NOW, ZoneOffset.UTC));
     private final TelemetryProcessor processor = new TelemetryProcessor(policy, watered::add);
 
-    private static String message(String deviceId, double humidity) {
-        return TelemetryCodec.toJson(new Telemetry(deviceId, NOW, 22.0, humidity));
+    private static Telemetry reading(String deviceId, double humidity) {
+        return new Telemetry(deviceId, NOW, 22.0, humidity);
     }
 
     @Test
     void watersTheDeviceThatReportedDrySoil() {
-        processor.onMessage(message("garden-1", 10.0));
+        processor.onTelemetry(reading("garden-1", 10.0));
 
         assertThat(watered).containsExactly("garden-1");
     }
 
     @Test
     void leavesWetSoilAlone() {
-        processor.onMessage(message("garden-1", 60.0));
+        processor.onTelemetry(reading("garden-1", 60.0));
 
-        assertThat(watered).isEmpty();
-    }
-
-    @Test
-    void ignoresMessagesItCannotRead() {
-        assertThatNoException().isThrownBy(() -> processor.onMessage("<not telemetry>"));
         assertThat(watered).isEmpty();
     }
 
     @Test
     void aFailedCommandDoesNotStopTheStream() {
         TelemetryProcessor failing = new TelemetryProcessor(policy, deviceId -> {
-            throw new ActuationException("device offline");
+            throw new CommandException("device offline");
         });
 
-        assertThatNoException().isThrownBy(() -> failing.onMessage(message("garden-1", 10.0)));
+        assertThatNoException().isThrownBy(() -> failing.onTelemetry(reading("garden-1", 10.0)));
     }
 }

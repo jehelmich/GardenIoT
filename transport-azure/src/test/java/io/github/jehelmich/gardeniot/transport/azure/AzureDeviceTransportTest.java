@@ -1,4 +1,4 @@
-package io.github.jehelmich.gardeniot.device;
+package io.github.jehelmich.gardeniot.transport.azure;
 
 import com.microsoft.azure.sdk.iot.device.Message;
 import io.github.jehelmich.gardeniot.telemetry.Telemetry;
@@ -10,7 +10,7 @@ import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class IotHubTelemetrySinkTest {
+class AzureDeviceTransportTest {
 
     private static final Instant NOW = Instant.parse("2017-07-17T10:15:30Z");
 
@@ -18,7 +18,7 @@ class IotHubTelemetrySinkTest {
     void wrapsTheReadingAsAJsonMessage() {
         Telemetry telemetry = new Telemetry("garden-1", NOW, 22.4, 31.9);
 
-        Message message = IotHubTelemetrySink.toMessage(telemetry);
+        Message message = AzureDeviceTransport.toMessage(telemetry);
 
         assertThat(new String(message.getBytes(), StandardCharsets.UTF_8)).isEqualTo(TelemetryCodec.toJson(telemetry));
         assertThat(message.getContentType()).isEqualTo("application/json");
@@ -28,9 +28,9 @@ class IotHubTelemetrySinkTest {
 
     @Test
     void flagsHotReadingsInAnApplicationProperty() {
-        assertThat(IotHubTelemetrySink.toMessage(new Telemetry("g", NOW, 30.0, 50.0)).getProperty("temperatureAlert"))
+        assertThat(AzureDeviceTransport.toMessage(new Telemetry("g", NOW, 30.0, 50.0)).getProperty("temperatureAlert"))
                 .isEqualTo("false");
-        assertThat(IotHubTelemetrySink.toMessage(new Telemetry("g", NOW, 30.1, 50.0)).getProperty("temperatureAlert"))
+        assertThat(AzureDeviceTransport.toMessage(new Telemetry("g", NOW, 30.1, 50.0)).getProperty("temperatureAlert"))
                 .isEqualTo("true");
     }
 }

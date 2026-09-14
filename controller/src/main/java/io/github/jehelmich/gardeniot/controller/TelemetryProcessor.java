@@ -1,15 +1,15 @@
 package io.github.jehelmich.gardeniot.controller;
 
 import io.github.jehelmich.gardeniot.telemetry.Telemetry;
-import io.github.jehelmich.gardeniot.telemetry.TelemetryCodec;
+import io.github.jehelmich.gardeniot.transport.CommandException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Turns raw hub messages into watering decisions.
+ * Turns readings into watering decisions.
  *
- * <p>Runs on the receive pipeline's thread, so it never throws: an unreadable message or a failed
- * command is logged and the stream carries on.
+ * <p>Runs on the transport's receive thread, so it never throws: a failed command is logged and
+ * the stream carries on.
  */
 public final class TelemetryProcessor {
 
@@ -23,14 +23,7 @@ public final class TelemetryProcessor {
         this.actuator = actuator;
     }
 
-    public void onMessage(String body) {
-        Telemetry telemetry;
-        try {
-            telemetry = TelemetryCodec.fromJson(body);
-        } catch (IllegalArgumentException e) {
-            log.warn("Ignoring message: {}", e.getMessage());
-            return;
-        }
+    public void onTelemetry(Telemetry telemetry) {
         log.info("{}: temperature={}°C humidity={}%", telemetry.deviceId(),
                 String.format("%.1f", telemetry.temperature()),
                 String.format("%.1f", telemetry.humidity()));
@@ -41,7 +34,7 @@ public final class TelemetryProcessor {
         log.info("{}: soil is dry, requesting watering", telemetry.deviceId());
         try {
             actuator.water(telemetry.deviceId());
-        } catch (ActuationException e) {
+        } catch (CommandException e) {
             log.warn("{}: {}", telemetry.deviceId(), e.getMessage());
         }
     }

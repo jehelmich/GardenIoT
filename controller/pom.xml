@@ -12,7 +12,7 @@
 
   <artifactId>controller</artifactId>
   <name>GardenIoT :: Controller</name>
-  <description>Cloud-side controller that watches device telemetry and triggers watering through a direct method.</description>
+  <description>Cloud-side controller that watches device telemetry and commands watering.</description>
 
   <properties>
     <mainClass>io.github.jehelmich.gardeniot.controller.ControllerApp</mainClass>
@@ -25,12 +25,14 @@
       <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>com.azure</groupId>
-      <artifactId>azure-messaging-eventhubs</artifactId>
+      <groupId>io.github.jehelmich.gardeniot</groupId>
+      <artifactId>transport-azure</artifactId>
+      <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>com.microsoft.azure.sdk.iot</groupId>
-      <artifactId>iot-service-client</artifactId>
+      <groupId>io.github.jehelmich.gardeniot</groupId>
+      <artifactId>transport-mqtt</artifactId>
+      <version>${project.version}</version>
     </dependency>
   </dependencies>
 

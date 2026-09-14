@@ -1,81 +1,85 @@
 package io.github.jehelmich.gardeniot.device;
 
-import com.microsoft.azure.sdk.iot.device.DeviceClient;
-import com.microsoft.azure.sdk.iot.device.IotHubClientProtocol;
-import com.microsoft.azure.sdk.iot.device.twin.TwinCollection;
 import io.github.jehelmich.gardeniot.config.Environment;
+import io.github.jehelmich.gardeniot.transport.DeviceTransportFactory;
+import io.github.jehelmich.gardeniot.transport.FleetChannel;
+import io.github.jehelmich.gardeniot.transport.azure.AzureDeviceSettings;
+import io.github.jehelmich.gardeniot.transport.azure.AzureDeviceTransportFactory;
+import io.github.jehelmich.gardeniot.transport.mqtt.MqttDeviceTransportFactory;
+import io.github.jehelmich.gardeniot.transport.mqtt.MqttSettings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Clock;
-import java.util.Map;
-import java.util.Random;
+import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 /**
- * Entry point of the simulated garden device.
+ * Entry point of the device process.
  *
- * <p>Connects to IoT Hub over MQTT, publishes a reading every few seconds, and listens for the
- * {@code water} and {@code reboot} direct methods. Configuration comes from the environment; see
- * {@link DeviceConfig}. Runs until interrupted.
+ * <p>Hosts one or more simulated plants, each with its own connection, and — where the transport
+ * allows — takes in new plants at runtime. Configuration comes from the environment; see
+ * {@link DeviceConfig} and the transport settings. Runs until interrupted.
  */
 public final class DeviceApp {
 
     private static final Logger log = LoggerFactory.getLogger(DeviceApp.class);
 
-    private static final double MIN_TEMPERATURE = 15.0;
-    private static final double MIN_HUMIDITY = 15.0;
-
     private DeviceApp() {
     }
 
     public static void main(String[] args) throws Exception {
+        Environment env = Environment.system();
         DeviceConfig config;
+        DeviceTransportFactory transports;
+        List<String> initialIds;
         try {
-            config = DeviceConfig.fromEnvironment(Environment.system());
-        } catch (IllegalStateException e) {
+            config = DeviceConfig.fromEnvironment(env);
+            switch (config.transport()) {
+                case AZURE -> {
+                    AzureDeviceTransportFactory azure = new AzureDeviceTransportFactory(AzureDeviceSettings.fromEnvironment(env));
+                    transports = azure;
+                    initialIds = config.deviceIds().isEmpty() ? azure.boundDeviceIds() : config.deviceIds();
+                }
+                case MQTT -> {
+                    transports = new MqttDeviceTransportFactory(MqttSettings.fromEnvironment(env));
+                    initialIds = config.deviceIds().isEmpty() ? List.of(defaultDeviceId()) : config.deviceIds();
+                }
+                default -> throw new IllegalStateException("Unsupported transport " + config.transport());
+            }
+        } catch (IllegalStateException | IllegalArgumentException e) {
             log.error("{}", e.getMessage());
             System.exit(2);
             return;
         }
-        Clock clock = Clock.systemUTC();
-        PlantSimulation plant = new PlantSimulation(MIN_TEMPERATURE, MIN_HUMIDITY, new Random());
 
-        DeviceClient client = new DeviceClient(config.connectionString(), IotHubClientProtocol.MQTT);
-        client.setConnectionStatusChangeCallback(
-                change -> log.info("Connection {} ({})", change.getNewStatus(), change.getNewStatusReason()),
-                null);
-
-        ExecutorService actions = Executors.newSingleThreadExecutor();
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        DeviceFleet fleet = new DeviceFleet(config, transports, Clock.systemUTC());
+        Optional<FleetChannel> fleetChannel = transports.fleetChannel();
         CountDownLatch stopped = new CountDownLatch(1);
-
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             log.info("Shutting down");
-            scheduler.shutdownNow();
-            actions.shutdownNow();
-            client.close();
+            fleetChannel.ifPresent(FleetChannel::close);
+            fleet.close();
+            transports.close();
             stopped.countDown();
         }, "shutdown"));
 
-        log.info("Connecting device '{}'", config.deviceId());
-        client.open(true);
-
-        PropertyReporter reporter = (name, value) ->
-                client.updateReportedProperties(new TwinCollection(Map.of(name, value)));
-        client.subscribeToMethods(
-                new DirectMethodHandler(plant, reporter, actions, config.actionDuration(), clock), null);
-
-        TelemetrySink sink = new IotHubTelemetrySink(client);
-        scheduler.scheduleWithFixedDelay(
-                new TelemetryPublisher(config.deviceId(), plant, clock, sink),
-                0, config.telemetryInterval().toMillis(), TimeUnit.MILLISECONDS);
-
-        log.info("Publishing every {}s. Press Ctrl-C to stop.", config.telemetryInterval().toSeconds());
+        for (String id : initialIds) {
+            fleet.add(id);
+        }
+        if (fleetChannel.isPresent()) {
+            fleetChannel.get().subscribe(fleet);
+            log.info("Accepting fleet commands");
+        }
+        log.info("Hosting {} over {}; publishing every {}s. Press Ctrl-C to stop.",
+                fleet.deviceIds(), config.transport(), config.telemetryInterval().toSeconds());
         stopped.await();
+    }
+
+    /** Without configuration, name the plant after the machine so two processes do not collide. */
+    static String defaultDeviceId() {
+        String host = DeviceFleet.hostName().toLowerCase().replaceAll("[^a-z0-9._-]", "-");
+        return "plant-" + (host.length() > 20 ? host.substring(0, 20) : host);
     }
 }
