@@ -1,3 +1,6 @@
+# ---------------------------------------------------------------------------
+# Maven build output
+# ---------------------------------------------------------------------------
 target/
 pom.xml.tag
 pom.xml.releaseBackup
@@ -7,6 +10,34 @@ release.properties
 dependency-reduced-pom.xml
 buildNumber.properties
 .mvn/timing.properties
+# Only the wrapper properties are tracked; the script downloads the rest.
+.mvn/wrapper/maven-wrapper.jar
 
-# Avoid ignoring Maven wrapper jar file (.jar files are usually ignored)
-!/.mvn/wrapper/maven-wrapper.jar
+# ---------------------------------------------------------------------------
+# IDEs and editors
+# ---------------------------------------------------------------------------
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath
+*~
+*.bak
+*.orig
+*.swp
+
+# ---------------------------------------------------------------------------
+# Operating systems
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+
+# ---------------------------------------------------------------------------
+# Local configuration (connection strings live in the environment, never here)
+# ---------------------------------------------------------------------------
+.env
+*.local

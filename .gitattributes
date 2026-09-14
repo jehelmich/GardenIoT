@@ -1,0 +1,9 @@
+* text=auto eol=lf
+
+*.java   text eol=lf diff=java
+*.xml    text eol=lf
+*.md     text eol=lf
+*.yml    text eol=lf
+*.sh     text eol=lf
+mvnw     text eol=lf
+mvnw.cmd text eol=crlf
