@@ -19,7 +19,7 @@ public class App
     // TODO: Configure for your personal IoT Hub
     private static String connStr = "Enter your Endpoint String here";
     public static final String iotHubConnectionString = "Enter your connection String here";
-    public static final String deviceId = "YourDeviceID;
+    public static final String deviceId = "YourDeviceID";
 
     public static final Long responseTimeout = TimeUnit.SECONDS.toSeconds(30);
     public static final Long connectTimeout = TimeUnit.SECONDS.toSeconds(5);
