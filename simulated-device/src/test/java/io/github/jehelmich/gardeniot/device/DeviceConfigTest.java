@@ -20,6 +20,10 @@ class DeviceConfigTest {
         assertThat(config.telemetryInterval()).isEqualTo(Duration.ofSeconds(5));
         assertThat(config.actionDuration()).isEqualTo(Duration.ofSeconds(5));
         assertThat(config.weather().mode()).isEqualTo("clear");
+        assertThat(config.wearMeanTicks()).isZero();
+        assertThat(DeviceConfig.fromEnvironment(new Environment(Map.of(DeviceConfig.WEAR_MEAN_TICKS, "1500")))
+                        .wearMeanTicks())
+                .isEqualTo(1500);
     }
 
     @Test

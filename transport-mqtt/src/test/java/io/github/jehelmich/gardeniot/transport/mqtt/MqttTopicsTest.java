@@ -13,6 +13,8 @@ class MqttTopicsTest {
         assertThat(topics.telemetry("basil")).isEqualTo("garden/basil/telemetry");
         assertThat(topics.state("basil", "simulation")).isEqualTo("garden/basil/state/simulation");
         assertThat(topics.status("basil")).isEqualTo("garden/basil/status");
+        assertThat(topics.alert("basil", "sensorStuck")).isEqualTo("garden/basil/alert/sensorStuck");
+        assertThat(topics.allAlerts()).isEqualTo("garden/+/alert/+");
         assertThat(topics.command("basil", "water")).isEqualTo("garden/basil/cmd/water");
         assertThat(topics.deviceCommands("basil")).isEqualTo("garden/basil/cmd/+");
     }

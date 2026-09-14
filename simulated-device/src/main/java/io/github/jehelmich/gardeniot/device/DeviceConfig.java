@@ -14,13 +14,15 @@ import java.util.List;
  * @param telemetryInterval how often a reading is published at simulation speed 1
  * @param actionDuration    how long the simulated pump and reboot take at speed 1
  * @param weather           the weather every plant starts under; see {@link WeatherProviders}
+ * @param wearMeanTicks     average readings between random breakages; 0 for none
  */
 public record DeviceConfig(
         Transport transport,
         List<String> deviceIds,
         Duration telemetryInterval,
         Duration actionDuration,
-        WeatherProviders.Setting weather) {
+        WeatherProviders.Setting weather,
+        long wearMeanTicks) {
 
     public static final String DEVICE_IDS = "DEVICE_IDS";
     /** For replicated deployments: a list of names and this replica's index into it. */
@@ -33,6 +35,7 @@ public record DeviceConfig(
     public static final String WEATHER_LATITUDE = "WEATHER_LATITUDE";
     public static final String WEATHER_LONGITUDE = "WEATHER_LONGITUDE";
     public static final String WEATHER_PLACE = "WEATHER_PLACE";
+    public static final String WEAR_MEAN_TICKS = "WEAR_MEAN_TICKS";
 
     public static DeviceConfig fromEnvironment(Environment env) {
         return new DeviceConfig(
@@ -44,7 +47,8 @@ public record DeviceConfig(
                         env.optional(WEATHER, "clear"),
                         optionalNumber(env, WEATHER_LATITUDE),
                         optionalNumber(env, WEATHER_LONGITUDE),
-                        env.optional(WEATHER_PLACE, null)));
+                        env.optional(WEATHER_PLACE, null)),
+                (long) env.optionalDouble(WEAR_MEAN_TICKS, 0));
     }
 
     private static Double optionalNumber(Environment env, String name) {

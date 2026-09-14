@@ -20,7 +20,8 @@ class DeviceFleetTest {
                     List.of(),
                     Duration.ofHours(1),
                     Duration.ZERO,
-                    WeatherProviders.Setting.of("clear")),
+                    WeatherProviders.Setting.of("clear"),
+                    0),
             transport,
             Clock.systemUTC(),
             new DeviceMetrics(new Metrics()));

@@ -165,10 +165,21 @@ class UiServerTest {
 
     @Test
     void maintenanceCommandsAreAllowed() throws Exception {
-        assertThat(post("/api/plants/basil/commands/repairSensor", null).statusCode())
+        assertThat(post("/api/plants/basil/commands/callTechnician", null).statusCode())
                 .isEqualTo(200);
         assertThat(post("/api/plants/basil/commands/repot", null).statusCode()).isEqualTo(200);
-        assertThat(sender.sent).containsExactly("basil:repairSensor", "basil:repot");
+        assertThat(post("/api/plants/basil/commands/pump", "{\"failed\":true}").statusCode())
+                .isEqualTo(200);
+        assertThat(sender.sent).containsExactly("basil:callTechnician", "basil:repot", "basil:pump:{\"failed\":true}");
+    }
+
+    @Test
+    void setsTheBreakdownRateOnEveryPlant() throws Exception {
+        model.apply(new BusMessage(Kind.STATUS, "basil", null, "online"));
+
+        assertThat(post("/api/wear", "{\"meanTicks\":400}").statusCode()).isEqualTo(200);
+        assertThat(post("/api/wear", "{}").statusCode()).isEqualTo(400);
+        assertThat(sender.sent).containsExactly("basil:setWear:{\"meanTicks\":400}");
     }
 
     @Test

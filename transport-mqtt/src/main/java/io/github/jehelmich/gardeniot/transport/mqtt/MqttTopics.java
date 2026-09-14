@@ -7,6 +7,7 @@ package io.github.jehelmich.gardeniot.transport.mqtt;
  * {prefix}/{deviceId}/telemetry         device-to-cloud messages
  * {prefix}/{deviceId}/state/{name}      reported state, retained (the "device twin")
  * {prefix}/{deviceId}/status            "online" / "offline", retained, set by a last will
+ * {prefix}/{deviceId}/alert/{alert}     what the controller thinks is wrong, retained
  * {prefix}/{deviceId}/cmd/{command}     command requests ("direct methods"), answered on the
  *                                       request's MQTT 5 response topic with its correlation data
  * {prefix}/_fleet/cmd/{command}         commands to whichever device process picks them up
@@ -41,6 +42,14 @@ public record MqttTopics(String prefix) {
 
     public String allStatus() {
         return prefix + "/+/status";
+    }
+
+    public String alert(String deviceId, String alert) {
+        return prefix + "/" + deviceId + "/alert/" + alert;
+    }
+
+    public String allAlerts() {
+        return prefix + "/+/alert/+";
     }
 
     public String command(String deviceId, String command) {

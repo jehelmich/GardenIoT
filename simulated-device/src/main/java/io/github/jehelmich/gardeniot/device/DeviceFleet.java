@@ -69,6 +69,7 @@ public final class DeviceFleet implements CommandHandler, AutoCloseable {
                 new Random(),
                 config.telemetryInterval(),
                 config.actionDuration(),
+                config.wearMeanTicks(),
                 clock,
                 scheduler,
                 actions,

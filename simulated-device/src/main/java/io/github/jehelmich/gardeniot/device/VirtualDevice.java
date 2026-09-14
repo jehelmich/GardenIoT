@@ -27,6 +27,8 @@ public final class VirtualDevice implements AutoCloseable {
 
     static final String JOB_TECHNICIAN = "technician";
     static final String JOB_REPOT = "repot";
+    static final String PUMP_OK = "OK";
+    static final String PUMP_FAILED = "FAILED";
 
     private static final Logger log = LoggerFactory.getLogger(VirtualDevice.class);
     private static final Duration MIN_INTERVAL = Duration.ofMillis(200);
@@ -47,6 +49,9 @@ public final class VirtualDevice implements AutoCloseable {
     private DeviceTransport transport;
     private volatile double speed = 1.0;
     private volatile SensorFault fault = SensorFault.NONE;
+    private volatile long ticksSinceFault;
+    private volatile boolean pumpFailed;
+    private final RandomFaults wear;
     private volatile Reading lastReported;
     private volatile int waterings;
     private volatile int repots;
@@ -63,12 +68,14 @@ public final class VirtualDevice implements AutoCloseable {
             Random random,
             Duration telemetryInterval,
             Duration actionDuration,
+            long wearMeanTicks,
             Clock clock,
             ScheduledExecutorService scheduler,
             Executor actions,
             DeviceMetrics metrics) {
         this.deviceId = deviceId;
         this.random = random;
+        this.wear = new RandomFaults(random, wearMeanTicks);
         this.plant = new PlantSimulation(profile, random);
         this.weather = weather;
         this.baseInterval = telemetryInterval;
@@ -101,7 +108,16 @@ public final class VirtualDevice implements AutoCloseable {
         metrics.command(deviceId, command);
     }
 
-    void startWatering() {
+    /**
+     * Runs the pump.
+     *
+     * @return false if the flow meter says nothing is coming out — a fault the device can see itself
+     */
+    boolean startWatering() {
+        if (pumpFailed) {
+            log.warn("{}: pump commanded but no flow detected", deviceId);
+            return false;
+        }
         actions.execute(() -> {
             try {
                 log.info("{}: watering...", deviceId);
@@ -116,6 +132,7 @@ public final class VirtualDevice implements AutoCloseable {
                 Thread.currentThread().interrupt();
             }
         });
+        return true;
     }
 
     void startReboot() {
@@ -132,16 +149,41 @@ public final class VirtualDevice implements AutoCloseable {
     }
 
     /**
-     * Sends for the technician, who recalibrates or replaces the sensor.
+     * Sends for the technician, who recalibrates or replaces the sensor and fixes the pump.
      *
      * @return false if someone is already on the way
      */
     boolean callTechnician() {
         return startJob(JOB_TECHNICIAN, TECHNICIAN_DELAY_FACTOR, () -> {
             fault = SensorFault.NONE;
+            ticksSinceFault = 0;
             lastReported = null;
-            log.info("{}: technician replaced the sensor", deviceId);
+            pumpFailed = false;
+            log.info("{}: technician serviced the sensor and the pump", deviceId);
         });
+    }
+
+    void setPumpFailed(boolean failed) {
+        pumpFailed = failed;
+        log.info("{}: pump {}", deviceId, failed ? "failed" : "repaired");
+        reportState();
+    }
+
+    void setWear(long meanTicks) {
+        wear.setMeanTicksBetweenFaults(meanTicks);
+        log.info("{}: wear every ~{} readings", deviceId, meanTicks);
+        reportState();
+    }
+
+    /** Something broke on its own. Visible for tests. */
+    void breakSomething(RandomFaults.Breakage breakage) {
+        log.warn("{}: {} — nobody has been told", deviceId, breakage);
+        switch (breakage) {
+            case SENSOR_STUCK -> setFault(SensorFault.STUCK);
+            case SENSOR_DRIFT -> setFault(SensorFault.DRIFT);
+            case SENSOR_SILENT -> setFault(SensorFault.SILENT);
+            case PUMP -> setPumpFailed(true);
+        }
     }
 
     /**
@@ -188,6 +230,7 @@ public final class VirtualDevice implements AutoCloseable {
 
     void setFault(SensorFault newFault) {
         fault = newFault;
+        ticksSinceFault = 0;
         log.info("{}: sensor fault {}", deviceId, newFault);
         reportState();
     }
@@ -212,6 +255,8 @@ public final class VirtualDevice implements AutoCloseable {
                 current.isAlive(),
                 current.causeOfDeath(),
                 fault,
+                pumpFailed ? PUMP_FAILED : PUMP_OK,
+                wear.meanTicksBetweenFaults(),
                 speed,
                 conditions.kind(),
                 conditions.label(),
@@ -230,8 +275,14 @@ public final class VirtualDevice implements AutoCloseable {
     void tick() {
         PlantSimulation current = plant;
         Reading truth = current.next(weather.current());
-        Reading reading = fault.apply(truth, lastReported);
-        metrics.tick(deviceId, truth, reading, fault, speed, current);
+        if (fault == SensorFault.NONE && !pumpFailed && job == null) {
+            RandomFaults.Breakage breakage = wear.roll();
+            if (breakage != null) {
+                breakSomething(breakage);
+            }
+        }
+        Reading reading = fault.apply(truth, lastReported, ticksSinceFault++);
+        metrics.tick(deviceId, truth, reading, fault, pumpFailed, speed, current);
         try {
             if (reading == null) {
                 log.info("{}: sensor silent (true humidity {})", deviceId, format(truth.humidity()));

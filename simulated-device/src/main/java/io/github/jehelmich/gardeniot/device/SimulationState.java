@@ -16,6 +16,8 @@ import java.time.Instant;
  * @param alive           false once health has reached zero
  * @param causeOfDeath    why, once dead
  * @param fault           the current sensor fault
+ * @param pump            "OK", or "FAILED" when the pump no longer delivers water
+ * @param wearMeanTicks   average readings between random breakages; 0 when wear is off
  * @param speed           simulation speed factor; 1 is real time
  * @param weather         headline weather
  * @param weatherLabel    weather as text
@@ -37,6 +39,8 @@ public record SimulationState(
         boolean alive,
         CauseOfDeath causeOfDeath,
         SensorFault fault,
+        String pump,
+        long wearMeanTicks,
         double speed,
         WeatherConditions.Kind weather,
         String weatherLabel,

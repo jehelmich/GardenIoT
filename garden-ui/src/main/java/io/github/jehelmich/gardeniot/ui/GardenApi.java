@@ -20,6 +20,7 @@ import java.util.Set;
  * DELETE /api/plants/{id}                                               removePlant on the fleet
  * POST   /api/plants/{id}/commands/{name}    JSON payload or empty      any allowed device command
  * POST   /api/speed                          {"factor": 25}             setSpeed on every known plant
+ * POST   /api/wear                           {"meanTicks": 1500}        setWear on every known plant
  * POST   /api/weather                        {"mode": "rain"} or {"mode": "real", "place": "Lisbon"}
  *                                                                       setWeather on every known plant;
  *                                                                       a place is geocoded first
@@ -30,8 +31,17 @@ import java.util.Set;
 final class GardenApi {
 
     /** The commands the page may send; anything else is refused before it reaches the bus. */
-    static final Set<String> ALLOWED_COMMANDS =
-            Set.of("water", "reboot", "repairSensor", "repot", "setSpeed", "fault", "setWeather", "status");
+    static final Set<String> ALLOWED_COMMANDS = Set.of(
+            "water",
+            "reboot",
+            "callTechnician",
+            "repot",
+            "setSpeed",
+            "fault",
+            "pump",
+            "setWeather",
+            "setWear",
+            "status");
 
     record Response(int httpStatus, String body) {}
 
@@ -73,6 +83,13 @@ final class GardenApi {
             }
             if (parts.length == 3 && parts[2].equals("speed") && method.equals("POST")) {
                 return speed(body);
+            }
+            if (parts.length == 3 && parts[2].equals("wear") && method.equals("POST")) {
+                JsonElement payload = Json.tree(body);
+                if (!(payload instanceof JsonObject object) || object.get("meanTicks") == null) {
+                    throw new IllegalArgumentException("Expected {\"meanTicks\": <number>}");
+                }
+                return broadcast("setWear", object);
             }
             return error(404, "No such endpoint");
         } catch (IllegalArgumentException e) {

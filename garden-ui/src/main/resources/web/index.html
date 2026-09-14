@@ -28,6 +28,11 @@
   .card .species i { font-style: italic; }
   .bar .band { position: absolute; top: 0; bottom: 0; background: rgba(63,157,63,.22); }
   .card .job { font-size: 12px; color: #1d5fa3; }
+  .card .alerts { display: flex; flex-direction: column; gap: 4px; }
+  .card .alert { font-size: 12px; background: #fff4e5; color: #8a4b00; border-left: 3px solid #e08a00; padding: 4px 8px; border-radius: 4px; }
+  .card .alert b { color: #5c3200; }
+  .card .pump { font-size: 12px; background: #fde8e4; color: #8b2e1c; border-left: 3px solid var(--red); padding: 4px 8px; border-radius: 4px; }
+  #log li.alert { color: #8a4b00; }
   .badge.job { background: #e3edf9; color: #1d5fa3; }
   .stage { position: relative; }
   .stage .sky { position: absolute; top: 0; right: 4px; font-size: 18px; opacity: .8; }
@@ -89,6 +94,13 @@
       Speed <input type="range" id="speed" min="0" max="5" step="1" value="0">
       <output id="speedOut">1×</output>
     </label>
+    <label class="control" title="How often sensors and pumps break on their own">
+      <select id="wear">
+        <option value="0">breakdowns: never</option>
+        <option value="1500">breakdowns: now and then</option>
+        <option value="400">breakdowns: often</option>
+      </select>
+    </label>
     <form class="control" id="weatherForm" title="The weather every pot stands in">
       <span id="weatherNow" class="weather-now">—</span>
       <select id="weatherMode">
@@ -119,8 +131,10 @@
       Each card is a simulated device talking to the same broker as the controller.
       The controller only ever sees <b>sensor says</b>; <b>truth</b> is the simulator's own view.
       Each species tells the controller what it likes (the green band), so a cactus is watered at 5&nbsp;% and a fern at 55&nbsp;%.
-      Break a sensor and watch the controller do the right thing with the wrong information; call the technician to fix it.
       Overwatering rots roots, frost and heat kill what cannot take them — try live weather from somewhere far away.
+      Turn on breakdowns and things fail on their own: the device notices a dead pump itself; a stuck sensor is caught by
+      the controller from what it sees in the readings; a drifting one is the hard case nobody notices until the plant
+      suffers. Whatever broke, only the technician fixes it.
     </div>
   </aside>
 </main>
@@ -151,6 +165,7 @@
         ev.plants.forEach(p => plants.set(p.deviceId, p));
         renderAll();
         syncWeather();
+        syncWear();
         loadProfiles();
         break;
       case 'telemetry': {
@@ -170,9 +185,19 @@
           if (ev.value.weatherLabel !== before.weatherLabel) { log(`weather: ${ev.value.weatherLabel} (${ev.value.weatherSource})`); syncWeather(); }
           if (before.job && !ev.value.job) log(`${p.deviceId}: ${before.job === 'technician' ? 'sensor replaced by the technician' : 'repotted, a new seedling'}`, 'fleet');
           if (!before.job && ev.value.job) log(`${p.deviceId}: ${ev.value.job === 'technician' ? 'technician called' : 'repotting scheduled'}`);
+          if (ev.value.pump !== before.pump) log(`${p.deviceId}: pump ${ev.value.pump === 'FAILED' ? 'reports no flow' : 'working again'}`, ev.value.pump === 'FAILED' ? 'dead' : 'fleet');
+          if (ev.value.wearMeanTicks !== before.wearMeanTicks) syncWear();
           if (ev.value.speed !== before.speed) syncSpeed();
         }
         if (ev.name === 'lastReboot') log(`${p.deviceId} rebooted`);
+        update(p);
+        break;
+      }
+      case 'alert': {
+        const p = plant(ev.deviceId);
+        p.alerts = p.alerts || {};
+        if (ev.value) { p.alerts[ev.name] = ev.value; log(`controller: ${p.deviceId} — ${ev.value.message || ev.name}`, 'alert'); }
+        else { delete p.alerts[ev.name]; log(`controller: ${p.deviceId} — ${ev.name} cleared`); }
         update(p);
         break;
       }
@@ -228,6 +253,7 @@
     el.innerHTML = `
       <div class="title"><h2></h2><span class="badge" data-f="badge"></span></div>
       <div class="species" data-f="species"></div>
+      <div class="alerts" data-f="alerts"></div>
       <div class="stage"><span class="sky" data-f="sky"></span><div data-f="stage"></div></div>
       <div class="stats">
         <span class="k">sensor says</span><span class="v" data-f="reported">–</span>
@@ -239,16 +265,12 @@
         <span class="k">growth</span><span class="v" data-f="growth">–</span>
         <div class="bar" style="grid-column:1/-1"><i class="growth" data-f="growthBar"></i></div>
         <span class="k">waterings</span><span class="v" data-f="waterings">–</span>
+        <span class="k">sensor</span><span class="v" data-f="sensor">–</span>
+        <span class="k">pump</span><span class="v" data-f="pump">–</span>
       </div>
       <div class="actions">
         <button data-a="water" title="Send the water command, as the controller would">💧 Water</button>
-        <select data-a="fault" title="Break or repair the humidity sensor">
-          <option value="NONE">sensor: healthy</option>
-          <option value="STUCK">sensor: stuck</option>
-          <option value="OVERREAD">sensor: over-reading</option>
-          <option value="SILENT">sensor: silent</option>
-        </select>
-        <button data-a="repair" title="Send a technician to recalibrate or replace the sensor">🔧 Technician</button>
+        <button data-a="repair" title="Send a technician: sensor recalibrated or replaced, pump serviced">🔧 Technician</button>
         <button data-a="repot" title="A fresh seedling of the same species">🪴 Repot</button>
         <span class="spacer"></span>
         <button data-a="remove" class="danger" title="Remove this plant from its device process">Remove</button>
@@ -257,8 +279,7 @@
       <div class="last" data-f="last"></div>`;
     el.querySelector('h2').textContent = id;
     el.querySelector('[data-a=water]').onclick = () => command(id, 'water');
-    el.querySelector('[data-a=fault]').onchange = e => command(id, 'fault', { type: e.target.value });
-    el.querySelector('[data-a=repair]').onclick = () => command(id, 'repairSensor');
+    el.querySelector('[data-a=repair]').onclick = () => command(id, 'callTechnician');
     el.querySelector('[data-a=repot]').onclick = () => command(id, 'repot');
     el.querySelector('[data-a=remove]').onclick = () => api('DELETE', `/api/plants/${encodeURIComponent(id)}`);
     return el;
@@ -280,13 +301,18 @@
     if (!p.online) { badge.textContent = 'offline'; badge.className = 'badge off'; }
     else if (!alive) { badge.textContent = 'dead · ' + (sim.causeOfDeath || '').toLowerCase().replace('_', ' '); badge.className = 'badge dead'; }
     else if (sim.job) { badge.textContent = sim.job === 'technician' ? 'technician due' : 'repotting'; badge.className = 'badge job'; }
-    else if (fault !== 'NONE') { badge.textContent = 'sensor ' + fault.toLowerCase(); badge.className = 'badge fault'; }
+    else if (fault !== 'NONE' || sim.pump === 'FAILED') { badge.textContent = 'needs technician'; badge.className = 'badge fault'; }
     else { badge.textContent = 'healthy'; badge.className = 'badge'; }
 
     const prof = p.state.profile;
     f('species').innerHTML = sim.profileName
       ? `${sim.profileName}${prof ? ` · likes ${prof.minHumidity}–${prof.maxHumidity} %` : ''}` : '';
     if (prof) { f('band').style.left = prof.minHumidity + '%'; f('band').style.width = (prof.maxHumidity - prof.minHumidity) + '%'; f('th').style.left = prof.minHumidity + '%'; }
+    const alertNames = { sensorStuck: 'sensor looks stuck', wateringIneffective: 'watering had no effect', silent: 'device is silent', pumpFault: 'device rejected watering' };
+    const alertHtml = Object.entries(p.alerts || {}).map(([name, a]) =>
+      `<div class="alert">⚠ <b>controller:</b> ${alertNames[name] || name} — ${a && a.message ? a.message : ''}</div>`);
+    if (sim.pump === 'FAILED') alertHtml.push('<div class="pump">⛔ <b>device:</b> pump reports no flow</div>');
+    f('alerts').innerHTML = alertHtml.join('');
     f('sky').textContent = weatherIcon(sim.weather);
     f('sky').title = sim.weatherLabel ? `${sim.weatherLabel} (${sim.weatherSource})` : '';
     f('job').textContent = sim.job ? `${sim.job === 'technician' ? 'Technician' : 'Repotting'} due ${time(sim.jobDoneAt)}` : '';
@@ -309,8 +335,11 @@
     f('growth').textContent = sim.growth != null ? pct(sim.growth) : '–';
     f('growthBar').style.width = (sim.growth || 0) + '%';
     f('waterings').textContent = sim.waterings != null ? sim.waterings : '–';
-    const sel = el.querySelector('[data-a=fault]');
-    if (sel.value !== fault) sel.value = fault;
+    const faultNames = { NONE: 'healthy', STUCK: 'stuck', DRIFT: 'drifting', OVERREAD: 'over-reading', SILENT: 'silent' };
+    f('sensor').textContent = faultNames[fault] || fault.toLowerCase();
+    f('sensor').className = 'v ' + (fault === 'NONE' ? '' : 'bad');
+    f('pump').textContent = sim.pump === 'FAILED' ? 'no flow' : sim.pump ? 'ok' : '–';
+    f('pump').className = 'v ' + (sim.pump === 'FAILED' ? 'bad' : '');
     el.querySelector('[data-a=water]').disabled = !p.online;
     f('last').textContent = p.lastCommand ? `last command: ${p.lastCommand} at ${time(p.lastCommandAt)}` : '';
     f('stage').innerHTML = plantSvg(sim.growth ?? 10, sim.health ?? 70, alive, truth ?? 50, sim.speed || 1);
@@ -433,6 +462,17 @@
     const place = weatherPlace.value.trim();
     if (place) api('POST', '/api/weather', { mode: 'real', place });
   };
+
+  const wearIn = document.getElementById('wear');
+  wearIn.onchange = () => api('POST', '/api/wear', { meanTicks: Number(wearIn.value) });
+  function syncWear() {
+    const p = [...plants.values()].find(x => x.state.simulation && x.state.simulation.wearMeanTicks != null);
+    if (!p || document.activeElement === wearIn) return;
+    const mean = p.state.simulation.wearMeanTicks;
+    let option = [...wearIn.options].find(o => Number(o.value) === mean);
+    if (!option) { option = document.createElement('option'); option.value = mean; option.textContent = `breakdowns: every ~${mean} readings`; wearIn.appendChild(option); }
+    wearIn.value = option.value;
+  }
 
   function syncWeather() {
     const p = [...plants.values()].find(x => x.state.simulation && x.state.simulation.weatherLabel);

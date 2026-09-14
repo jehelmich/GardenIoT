@@ -38,6 +38,7 @@ class VirtualDeviceTest {
                 new Random(1L),
                 Duration.ofHours(1),
                 Duration.ZERO,
+                0,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 scheduler,
                 actions,
@@ -128,7 +129,7 @@ class VirtualDeviceTest {
         device.tick();
 
         assertThat(metrics.scrape())
-                .contains("gardeniot_device_sensor_fault_code{device=\"basil\"} 2.0")
+                .contains("gardeniot_device_sensor_fault_code{device=\"basil\"} 3.0")
                 .contains("gardeniot_device_true_humidity_percent{device=\"basil\"}")
                 .contains("gardeniot_device_reported_humidity_percent{device=\"basil\"}");
     }
@@ -140,13 +141,55 @@ class VirtualDeviceTest {
     }
 
     @Test
-    void theTechnicianRepairsTheSensor() {
+    void theTechnicianRepairsTheSensorAndThePump() {
         device.setFault(SensorFault.STUCK);
+        device.setPumpFailed(true);
 
         assertThat(device.callTechnician()).isTrue();
 
         assertThat(device.state().fault()).isEqualTo(SensorFault.NONE);
+        assertThat(device.state().pump()).isEqualTo(VirtualDevice.PUMP_OK);
         assertThat(device.state().job()).isNull();
+    }
+
+    @Test
+    void aFailedPumpIsNoticedByTheDeviceItself() {
+        device.setPumpFailed(true);
+        double before = device.plant().current().humidity();
+
+        assertThat(device.startWatering()).isFalse();
+
+        assertThat(device.plant().current().humidity()).isEqualTo(before);
+        assertThat(device.state().waterings()).isZero();
+        assertThat(transport.handler.handle("water", null).status()).isEqualTo(500);
+    }
+
+    @Test
+    void wearBreaksThingsOnItsOwnButOnlyOneAtATime() {
+        device.setWear(1); // every reading
+
+        device.tick();
+        SimulationState broken = device.state();
+        assertThat(broken.fault() != SensorFault.NONE || broken.pump().equals(VirtualDevice.PUMP_FAILED))
+                .isTrue();
+
+        IntStream.range(0, 20).forEach(i -> device.tick());
+        SimulationState later = device.state();
+        assertThat(later.fault()).isEqualTo(broken.fault());
+        assertThat(later.pump()).isEqualTo(broken.pump());
+    }
+
+    @Test
+    void aDriftingSensorLiesMoreWithEveryReading() {
+        device.setFault(SensorFault.DRIFT);
+
+        device.tick();
+        double first = transport.published.get(0).humidity() - device.state().trueHumidity();
+        IntStream.range(0, 50).forEach(i -> device.tick());
+        double later = transport.published.get(transport.published.size() - 1).humidity()
+                - device.state().trueHumidity();
+
+        assertThat(later).isGreaterThan(first + 5.0);
     }
 
     @Test

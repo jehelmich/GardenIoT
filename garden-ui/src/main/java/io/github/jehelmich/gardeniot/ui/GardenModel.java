@@ -28,6 +28,7 @@ public final class GardenModel {
         private boolean online;
         private Telemetry telemetry;
         private final Map<String, JsonElement> state = new TreeMap<>();
+        private final Map<String, JsonElement> alerts = new TreeMap<>();
         private String lastCommand;
         private Instant lastCommandAt;
 
@@ -43,6 +44,9 @@ public final class GardenModel {
             JsonObject stateJson = new JsonObject();
             state.forEach(stateJson::add);
             json.add("state", stateJson);
+            JsonObject alertsJson = new JsonObject();
+            alerts.forEach(alertsJson::add);
+            json.add("alerts", alertsJson);
             json.addProperty("lastCommand", lastCommand);
             json.addProperty("lastCommandAt", lastCommandAt == null ? null : lastCommandAt.toString());
             return json;
@@ -64,6 +68,7 @@ public final class GardenModel {
             event = switch (message.kind()) {
                 case TELEMETRY -> telemetry(message);
                 case STATE -> state(message);
+                case ALERT -> alert(message);
                 case STATUS -> status(message);
                 case COMMAND -> command(message);
                 case FLEET_COMMAND -> fleet(message);
@@ -101,6 +106,25 @@ public final class GardenModel {
             plant.state.put(message.name(), value);
         }
         JsonObject event = eventObject("state", message.deviceId());
+        event.addProperty("name", message.name());
+        event.add("value", value);
+        return event.toString();
+    }
+
+    private String alert(BusMessage message) {
+        JsonElement value;
+        try {
+            value = Json.tree(message.payload());
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+        Plant plant = plant(message.deviceId());
+        if (value == null) {
+            plant.alerts.remove(message.name());
+        } else {
+            plant.alerts.put(message.name(), value);
+        }
+        JsonObject event = eventObject("alert", message.deviceId());
         event.addProperty("name", message.name());
         event.add("value", value);
         return event.toString();

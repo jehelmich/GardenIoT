@@ -69,6 +69,8 @@ spec:
               value: {{ .Values.device.actionDurationSeconds | quote }}
             - name: WEATHER
               value: {{ .Values.device.weather | quote }}
+            - name: WEAR_MEAN_TICKS
+              value: {{ .Values.device.wearMeanTicks | quote }}
             {{- with .Values.device.weatherLatitude }}
             - name: WEATHER_LATITUDE
               value: {{ . | quote }}

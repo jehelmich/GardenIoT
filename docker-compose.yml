@@ -56,6 +56,8 @@ services:
       TELEMETRY_INTERVAL_SECONDS: ${TELEMETRY_INTERVAL_SECONDS:-5}
       # clear | rain | drought | heatwave | cold | auto (changes by itself) | real (needs WEATHER_LATITUDE/LONGITUDE)
       WEATHER: ${WEATHER:-auto}
+      # Average readings between random breakdowns (sensor stuck/drifting/silent, pump); 0 = never
+      WEAR_MEAN_TICKS: ${WEAR_MEAN_TICKS:-1500}
     depends_on:
       mosquitto:
         condition: service_healthy

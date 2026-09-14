@@ -3,13 +3,16 @@ package io.github.jehelmich.gardeniot.controller;
 import io.github.jehelmich.gardeniot.config.Environment;
 import io.github.jehelmich.gardeniot.observability.Metrics;
 import io.github.jehelmich.gardeniot.observability.ObservabilityServer;
+import io.github.jehelmich.gardeniot.transport.AlertPublisher;
 import io.github.jehelmich.gardeniot.transport.DeviceCommandSender;
 import io.github.jehelmich.gardeniot.transport.DeviceProfileSource;
 import io.github.jehelmich.gardeniot.transport.TelemetrySource;
+import io.github.jehelmich.gardeniot.transport.azure.AzureAlertPublisher;
 import io.github.jehelmich.gardeniot.transport.azure.AzureCommandSender;
 import io.github.jehelmich.gardeniot.transport.azure.AzureDeviceProfileSource;
 import io.github.jehelmich.gardeniot.transport.azure.AzureServiceSettings;
 import io.github.jehelmich.gardeniot.transport.azure.AzureTelemetrySource;
+import io.github.jehelmich.gardeniot.transport.mqtt.MqttAlertPublisher;
 import io.github.jehelmich.gardeniot.transport.mqtt.MqttCommandSender;
 import io.github.jehelmich.gardeniot.transport.mqtt.MqttDeviceProfileSource;
 import io.github.jehelmich.gardeniot.transport.mqtt.MqttSettings;
@@ -40,6 +43,7 @@ public final class ControllerApp {
         TelemetrySource source;
         DeviceCommandSender commands;
         DeviceProfileSource profiles;
+        AlertPublisher alerts;
         AutoCloseable commandsResource;
         try {
             config = ControllerConfig.fromEnvironment(env);
@@ -49,6 +53,7 @@ public final class ControllerApp {
                     source = new AzureTelemetrySource(azure);
                     commands = new AzureCommandSender(azure);
                     profiles = new AzureDeviceProfileSource(azure);
+                    alerts = new AzureAlertPublisher(azure);
                     commandsResource = () -> {};
                 }
                 case MQTT -> {
@@ -56,11 +61,14 @@ public final class ControllerApp {
                     source = new MqttTelemetrySource(mqtt);
                     MqttCommandSender sender = new MqttCommandSender(mqtt);
                     MqttDeviceProfileSource profileSource = new MqttDeviceProfileSource(mqtt);
+                    MqttAlertPublisher alertPublisher = new MqttAlertPublisher(mqtt, Clock.systemUTC());
                     commands = sender;
                     profiles = profileSource;
+                    alerts = alertPublisher;
                     commandsResource = () -> {
                         sender.close();
                         profileSource.close();
+                        alertPublisher.close();
                     };
                 }
                 default -> throw new IllegalStateException("Unsupported transport " + config.transport());
@@ -76,8 +84,14 @@ public final class ControllerApp {
         ObservabilityServer observability = ObservabilityServer.start(env, metrics, ready::get);
         WateringPolicy policy =
                 new WateringPolicy(config.humidityThreshold(), config.wateringCooldown(), Clock.systemUTC());
+        ControllerMetrics controllerMetrics = new ControllerMetrics(metrics);
+        AnomalyDetector anomalies =
+                new AnomalyDetector(alerts, controllerMetrics, Clock.systemUTC(), config.silenceAfter());
         TelemetryProcessor processor = new TelemetryProcessor(
-                policy, new CommandWateringActuator(commands), profiles, new ControllerMetrics(metrics));
+                policy, new CommandWateringActuator(commands), profiles, controllerMetrics, anomalies);
+        java.util.concurrent.ScheduledExecutorService watchdog =
+                java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
+        watchdog.scheduleAtFixedRate(anomalies::checkSilence, 5, 5, java.util.concurrent.TimeUnit.SECONDS);
 
         CountDownLatch stopped = new CountDownLatch(1);
         AtomicInteger exitCode = new AtomicInteger(0);
@@ -87,6 +101,7 @@ public final class ControllerApp {
             if (closed.compareAndSet(false, true)) {
                 log.info("Shutting down");
                 ready.set(false);
+                watchdog.shutdownNow();
                 source.close();
                 if (observability != null) {
                     observability.close();
@@ -105,6 +120,9 @@ public final class ControllerApp {
         }
         if (profiles instanceof MqttDeviceProfileSource mqttProfiles) {
             mqttProfiles.start();
+        }
+        if (alerts instanceof MqttAlertPublisher mqttAlerts) {
+            mqttAlerts.start();
         }
         source.start(processor::onTelemetry, error -> {
             log.error("Telemetry stream failed: {}", error.getMessage());

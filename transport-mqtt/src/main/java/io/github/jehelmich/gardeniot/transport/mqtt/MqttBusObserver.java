@@ -2,6 +2,7 @@ package io.github.jehelmich.gardeniot.transport.mqtt;
 
 import com.hivemq.client.mqtt.mqtt5.Mqtt5AsyncClient;
 import com.hivemq.client.mqtt.mqtt5.message.publish.Mqtt5Publish;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -17,6 +18,7 @@ public final class MqttBusObserver implements AutoCloseable {
         TELEMETRY,
         STATE,
         STATUS,
+        ALERT,
         COMMAND,
         FLEET_COMMAND
     }
@@ -40,9 +42,7 @@ public final class MqttBusObserver implements AutoCloseable {
 
     public void start(Consumer<BusMessage> onMessage) throws Exception {
         client = MqttClients.connect(settings, "observer-" + UUID.randomUUID(), null, null);
-        for (String filter : new String[] {
-            topics.allTelemetry(), topics.allState(), topics.allStatus(), topics.allCommands(), topics.fleetCommand("+")
-        }) {
+        for (String filter : subscriptions()) {
             client.subscribeWith()
                     .topicFilter(filter)
                     .qos(MqttClients.QOS)
@@ -56,6 +56,17 @@ public final class MqttBusObserver implements AutoCloseable {
                     .send()
                     .get(30, TimeUnit.SECONDS);
         }
+    }
+
+    /** Every topic family the observer listens to; visible for tests. */
+    List<String> subscriptions() {
+        return List.of(
+                topics.allTelemetry(),
+                topics.allState(),
+                topics.allStatus(),
+                topics.allAlerts(),
+                topics.allCommands(),
+                topics.fleetCommand("+"));
     }
 
     BusMessage classify(Mqtt5Publish publish) {
@@ -76,6 +87,7 @@ public final class MqttBusObserver implements AutoCloseable {
             case "telemetry" -> new BusMessage(Kind.TELEMETRY, deviceId, null, payload);
             case "status" -> new BusMessage(Kind.STATUS, deviceId, null, payload);
             case "state" -> segments.length == 4 ? new BusMessage(Kind.STATE, deviceId, segments[3], payload) : null;
+            case "alert" -> segments.length == 4 ? new BusMessage(Kind.ALERT, deviceId, segments[3], payload) : null;
             case "cmd" -> segments.length == 4 ? new BusMessage(Kind.COMMAND, deviceId, segments[3], payload) : null;
             default -> null;
         };

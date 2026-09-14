@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import io.github.jehelmich.gardeniot.config.Transport;
+import io.github.jehelmich.gardeniot.controller.AnomalyDetector;
 import io.github.jehelmich.gardeniot.controller.CommandWateringActuator;
 import io.github.jehelmich.gardeniot.controller.ControllerMetrics;
 import io.github.jehelmich.gardeniot.controller.TelemetryProcessor;
@@ -17,6 +18,8 @@ import io.github.jehelmich.gardeniot.observability.Metrics;
 import io.github.jehelmich.gardeniot.telemetry.Telemetry;
 import io.github.jehelmich.gardeniot.transport.CommandResult;
 import io.github.jehelmich.gardeniot.transport.FleetChannel;
+import io.github.jehelmich.gardeniot.transport.mqtt.MqttAlertPublisher;
+import io.github.jehelmich.gardeniot.transport.mqtt.MqttBusObserver;
 import io.github.jehelmich.gardeniot.transport.mqtt.MqttCommandSender;
 import io.github.jehelmich.gardeniot.transport.mqtt.MqttDeviceProfileSource;
 import io.github.jehelmich.gardeniot.transport.mqtt.MqttDeviceTransportFactory;
@@ -53,6 +56,9 @@ class WateringLoopIT {
     private MqttTelemetrySource source;
     private MqttCommandSender commands;
     private MqttDeviceProfileSource profiles;
+    private MqttAlertPublisher alerts;
+    private MqttBusObserver observer;
+    private final List<MqttBusObserver.BusMessage> alertsSeen = new CopyOnWriteArrayList<>();
     private final List<Telemetry> seen = new CopyOnWriteArrayList<>();
     private final AtomicReference<Throwable> streamFailure = new AtomicReference<>();
 
@@ -63,7 +69,8 @@ class WateringLoopIT {
         // device side
         deviceTransports = new MqttDeviceTransportFactory(settings);
         fleet = new DeviceFleet(
-                new DeviceConfig(Transport.MQTT, List.of(), TICK, Duration.ZERO, WeatherProviders.Setting.of("clear")),
+                new DeviceConfig(
+                        Transport.MQTT, List.of(), TICK, Duration.ZERO, WeatherProviders.Setting.of("clear"), 0),
                 deviceTransports,
                 Clock.systemUTC(),
                 new DeviceMetrics(new Metrics()));
@@ -73,9 +80,19 @@ class WateringLoopIT {
         // cloud side
         commands = new MqttCommandSender(settings).start();
         profiles = new MqttDeviceProfileSource(settings).start();
+        alerts = new MqttAlertPublisher(settings, Clock.systemUTC()).start();
         WateringPolicy policy = new WateringPolicy(25.0, Duration.ofSeconds(2), Clock.systemUTC());
+        ControllerMetrics controllerMetrics = new ControllerMetrics(new Metrics());
+        AnomalyDetector anomalies =
+                new AnomalyDetector(alerts, controllerMetrics, Clock.systemUTC(), Duration.ofMinutes(5));
         TelemetryProcessor processor = new TelemetryProcessor(
-                policy, new CommandWateringActuator(commands), profiles, new ControllerMetrics(new Metrics()));
+                policy, new CommandWateringActuator(commands), profiles, controllerMetrics, anomalies);
+        observer = new MqttBusObserver(settings);
+        observer.start(message -> {
+            if (message.kind() == MqttBusObserver.Kind.ALERT) {
+                alertsSeen.add(message);
+            }
+        });
         source = new MqttTelemetrySource(settings);
         source.start(
                 telemetry -> {
@@ -90,6 +107,8 @@ class WateringLoopIT {
         source.close();
         commands.close();
         profiles.close();
+        alerts.close();
+        observer.close();
         fleetChannel.close();
         fleet.close();
         deviceTransports.close();
@@ -101,7 +120,8 @@ class WateringLoopIT {
 
         await().atMost(Duration.ofSeconds(20))
                 .untilAsserted(
-                        () -> assertThat(seen).anyMatch(t -> t.deviceId().equals("basil") && t.humidity() < 25.0));
+                        // A basil asks for water below 35%; the garden-wide 25% no longer applies to it.
+                        () -> assertThat(seen).anyMatch(t -> t.deviceId().equals("basil") && t.humidity() < 35.0));
         await().atMost(Duration.ofSeconds(20))
                 .untilAsserted(() -> assertThat(basil.state().waterings()).isGreaterThanOrEqualTo(1));
         await().atMost(Duration.ofSeconds(20))
@@ -157,6 +177,20 @@ class WateringLoopIT {
         Thread.sleep(TICK.toMillis() * 15);
         CommandResult status = commands.send("thyme", "status", null);
         assertThat(status.payload().toString()).contains("\"waterings\":0");
+
+        // ...but the controller notices a reading that never changes and says so on the bus.
+        await().atMost(Duration.ofSeconds(10))
+                .untilAsserted(() -> assertThat(alertsSeen)
+                        .anyMatch(a -> a.deviceId().equals("thyme")
+                                && a.name().equals(AnomalyDetector.SENSOR_STUCK)
+                                && !a.payload().isEmpty()));
+        // The technician fixes it and the alert clears.
+        assertThat(commands.send("thyme", "callTechnician", null).status()).isEqualTo(202);
+        await().atMost(Duration.ofSeconds(15))
+                .untilAsserted(() -> assertThat(alertsSeen)
+                        .anyMatch(a -> a.deviceId().equals("thyme")
+                                && a.name().equals(AnomalyDetector.SENSOR_STUCK)
+                                && a.payload().isEmpty()));
         assertThat(seen.stream()
                         .filter(t -> t.deviceId().equals("thyme"))
                         .map(Telemetry::humidity)

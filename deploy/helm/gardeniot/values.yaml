@@ -39,6 +39,8 @@ device:
   weatherLatitude: ""
   weatherLongitude: ""
   weatherPlace: ""
+  # Average readings between random breakdowns; 0 for none
+  wearMeanTicks: 1500
   resources:
     requests: {cpu: 50m, memory: 192Mi}
     limits: {memory: 384Mi}
