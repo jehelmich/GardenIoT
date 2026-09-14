@@ -14,12 +14,18 @@ transport.
 docker compose up --build        # then open http://localhost:3000
 ```
 
+![The garden page: three plants, one thriving, two dead behind broken sensors](docs/images/garden-ui.png)
+
+*The garden page at <http://localhost:8088>, 25× speed. Basil is thriving after
+three waterings. Mint's humidity sensor was frozen at 96 % with the sensor
+control; the controller, trusting it, never watered again and the plant died at
+15 % real humidity. Thyme's sensor went silent with the same result.*
+
 ![Grafana dashboard: reported vs. true soil humidity, waterings, sensor faults](docs/images/grafana.png)
 
-*Two plants at 25× simulation speed. Basil dries out and gets watered in a
-sawtooth. Mint's humidity sensor was frozen with the `fault` command halfway
-through: the controller keeps seeing 96 % (solid line) while the soil is
-actually bone dry (dashed) — and, trusting its sensor, never waters it again.*
+*The same story in Grafana: basil's sawtooth of drying and watering; mint's
+reported humidity (solid) parting from the truth (dashed) the moment the
+sensor stuck.*
 
 A hobby project from July 2017, rebuilt in 2026 as a portfolio piece. See
 [Status](#status) for what has and has not been verified.
@@ -53,6 +59,11 @@ A hobby project from July 2017, rebuilt in 2026 as a portfolio piece. See
 4. Both processes expose Prometheus metrics. The device also exposes the
    simulator's **ground truth** next to what its sensor claimed, which is how the
    dashboard shows a lying sensor.
+5. The **garden page** watches the same broker and renders every plant live:
+   it grows while the soil is comfortably damp, wilts as its health drains, and
+   dies when it reaches zero. From the page you can water, break or repair a
+   sensor, add plants, and run the whole simulation up to 100× — a small game
+   that shows what the loop does, and what it cannot know.
 
 The applications talk to *ports* (`DeviceTransport`, `TelemetrySource`,
 `DeviceCommandSender`); `transport-mqtt` and `transport-azure` are the adapters.
@@ -68,6 +79,7 @@ transport-mqtt/    MQTT 5 adapter (HiveMQ client): topics, request/response, las
 transport-azure/   Azure IoT Hub adapter: Entra ID or connection strings, direct methods, twins
 simulated-device/  A fleet of virtual plants with sensor faults and runtime speed control
 controller/        The watering loop
+garden-ui/         The live garden page: bus observer, server-sent events, JSON API, one HTML file
 integration-tests/ The loop end to end against Mosquitto in Testcontainers
 deploy/helm/       Helm chart; also the source of the broker, Prometheus and Grafana config
 deploy/terraform/  Azure: IoT Hub, managed identity, Container Apps
@@ -84,9 +96,15 @@ docker compose up --build
 ```
 
 Brings up Mosquitto, the controller, a device process hosting `basil` and
-`mint`, Prometheus and Grafana. Grafana is at <http://localhost:3000> (no login,
-dashboard provisioned), Prometheus at <http://localhost:9090>. Watch the loop in
-the logs, or poke at the devices directly — commands are plain MQTT 5 requests:
+`mint`, the garden page, Prometheus and Grafana:
+
+| | |
+|---|---|
+| <http://localhost:8088> | the garden page — watch, water, break sensors, add plants, change speed |
+| <http://localhost:3000> | Grafana, no login, dashboard provisioned |
+| <http://localhost:9090> | Prometheus |
+
+Everything the page does is also a plain MQTT 5 request you can send yourself:
 
 ```sh
 # 25x speed, then break mint's sensor
@@ -149,6 +167,7 @@ in this repository.
 | `PLANT_NAMES`, `PLANT_INDEX` | device | For replicas: this replica hosts `PLANT_NAMES[PLANT_INDEX]` |
 | `TELEMETRY_INTERVAL_SECONDS` | device | Seconds between readings at speed 1; default `5` |
 | `ACTION_DURATION_SECONDS` | device | How long the pump and a reboot take at speed 1; default `5` |
+| `UI_PORT` | garden-ui | Port of the page (with `/metrics` and health on it); default `8080`, compose maps it to 8088 |
 
 MQTT transport:
 
@@ -186,6 +205,11 @@ taken from it) and optionally `IOTHUB_DEVICE_PROTOCOL` (`MQTT`, `MQTT_WS`,
 Fleet commands (MQTT only, any device process picks them up): `addPlant`,
 `removePlant`, `listPlants` with `{"deviceId": "thyme"}`.
 
+The garden page wraps the same commands in a JSON API: `POST /api/plants`,
+`DELETE /api/plants/{id}`, `POST /api/plants/{id}/commands/{name}`,
+`POST /api/speed`; `GET /events` is the server-sent event stream the page
+renders from.
+
 ## Engineering notes
 
 - **Ports and adapters, for a reason.** The original IoT Hub deployment is long
@@ -211,8 +235,9 @@ Fleet commands (MQTT only, any device process picks them up): `addPlant`,
 
 ## Status
 
-Verified: the build, unit and integration tests; the compose stack; the Helm
-chart on kind, with metrics scraped in-cluster; the MQTT transport end to end.
+Verified: the build, unit and integration tests; the compose stack including
+the garden page; the Helm chart on kind, with metrics scraped in-cluster; the
+MQTT transport end to end.
 The Azure transport compiles against the current SDKs, its settings are unit
 tested, and the Terraform configuration validates — but neither has been run
 against a live subscription since the 2017 original. That is the next thing to
