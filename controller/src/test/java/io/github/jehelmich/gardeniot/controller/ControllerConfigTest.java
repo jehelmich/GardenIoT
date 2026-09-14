@@ -17,7 +17,7 @@ class ControllerConfigTest {
 
         assertThat(config.transport()).isEqualTo(Transport.MQTT);
         assertThat(config.humidityThreshold()).isEqualTo(25.0);
-        assertThat(config.wateringCooldown()).isEqualTo(Duration.ofSeconds(60));
+        assertThat(config.wateringCooldown()).isEqualTo(Duration.ofSeconds(15));
     }
 
     @Test

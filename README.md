@@ -162,7 +162,7 @@ in this repository.
 | `TRANSPORT` | both | `mqtt` (default) or `azure` |
 | `METRICS_PORT` | both | Port for `/metrics`, `/healthz`, `/readyz`; default `8080`, `0` disables |
 | `HUMIDITY_THRESHOLD` | controller | Water below this soil humidity in percent; default `25` |
-| `WATERING_COOLDOWN_SECONDS` | controller | Minimum time between two watering commands to one device; default `60` |
+| `WATERING_COOLDOWN_SECONDS` | controller | Minimum time between two watering commands to one device; default `15` |
 | `DEVICE_IDS` | device | Comma-separated plants to host; default: one named after the machine |
 | `PLANT_NAMES`, `PLANT_INDEX` | device | For replicas: this replica hosts `PLANT_NAMES[PLANT_INDEX]` |
 | `TELEMETRY_INTERVAL_SECONDS` | device | Seconds between readings at speed 1; default `5` |

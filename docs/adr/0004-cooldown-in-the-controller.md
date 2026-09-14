@@ -12,7 +12,7 @@ controller could wait, or both.
 ## Decision
 
 `WateringPolicy` tracks the last watering per device and refuses to water again
-within a cooldown (60 s by default). The device stays simple and does what it is
+within a cooldown (15 s by default: pump time plus one telemetry interval, with margin). The device stays simple and does what it is
 told.
 
 ## Consequences

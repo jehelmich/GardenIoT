@@ -67,6 +67,20 @@ spec:
               value: {{ .Values.device.telemetryIntervalSeconds | quote }}
             - name: ACTION_DURATION_SECONDS
               value: {{ .Values.device.actionDurationSeconds | quote }}
+            - name: WEATHER
+              value: {{ .Values.device.weather | quote }}
+            {{- with .Values.device.weatherLatitude }}
+            - name: WEATHER_LATITUDE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.device.weatherLongitude }}
+            - name: WEATHER_LONGITUDE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.device.weatherPlace }}
+            - name: WEATHER_PLACE
+              value: {{ . | quote }}
+            {{- end }}
           ports:
             - name: http
               containerPort: 8080

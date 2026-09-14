@@ -22,7 +22,7 @@ controller:
   # watering. Scaling it out would need partitioned consumption or leader election.
   replicas: 1
   humidityThreshold: 25
-  wateringCooldownSeconds: 60
+  wateringCooldownSeconds: 15
   resources:
     requests: {cpu: 100m, memory: 256Mi}
     limits: {memory: 512Mi}
@@ -34,6 +34,11 @@ device:
   replicas: 2
   telemetryIntervalSeconds: 5
   actionDurationSeconds: 5
+  # clear | rain | drought | heatwave | cold | auto | real; live weather needs latitude and longitude
+  weather: auto
+  weatherLatitude: ""
+  weatherLongitude: ""
+  weatherPlace: ""
   resources:
     requests: {cpu: 50m, memory: 192Mi}
     limits: {memory: 384Mi}

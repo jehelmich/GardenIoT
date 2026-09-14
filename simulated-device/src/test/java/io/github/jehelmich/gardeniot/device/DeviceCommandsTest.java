@@ -23,7 +23,9 @@ class DeviceCommandsTest {
     void connect() throws Exception {
         device = new VirtualDevice(
                 "basil",
-                new PlantSimulation(15.0, 15.0, new Random(1L)),
+                PlantProfile.DEFAULT,
+                WeatherProvider.fixed(WeatherConditions.CLEAR),
+                new Random(1L),
                 Duration.ofHours(1),
                 Duration.ZERO,
                 Clock.systemUTC(),
@@ -83,6 +85,37 @@ class DeviceCommandsTest {
         assertThat(transport.handler.handle("fault", "{\"type\": \"none\"}").status())
                 .isEqualTo(200);
         assertThat(device.state().fault()).isEqualTo(SensorFault.NONE);
+    }
+
+    @Test
+    void maintenanceIsAcceptedOnceAtATime() {
+        transport.handler.handle("fault", "{\"type\": \"stuck\"}");
+
+        assertThat(transport.handler.handle("repairSensor", null).status()).isEqualTo(202);
+        assertThat(device.state().fault()).isEqualTo(SensorFault.NONE);
+        assertThat(transport.handler.handle("repot", null).status()).isEqualTo(202);
+        assertThat(device.state().repots()).isEqualTo(1);
+    }
+
+    @Test
+    void weatherIsValidated() {
+        assertThat(transport
+                        .handler
+                        .handle("setWeather", "{\"mode\": \"drought\"}")
+                        .status())
+                .isEqualTo(200);
+        assertThat(device.state().weather()).isEqualTo(WeatherConditions.Kind.DROUGHT);
+        assertThat(transport
+                        .handler
+                        .handle("setWeather", "{\"mode\": \"plague\"}")
+                        .status())
+                .isEqualTo(400);
+        assertThat(transport
+                        .handler
+                        .handle("setWeather", "{\"mode\": \"real\"}")
+                        .status())
+                .isEqualTo(400);
+        assertThat(transport.handler.handle("setWeather", null).status()).isEqualTo(400);
     }
 
     @Test

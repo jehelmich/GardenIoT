@@ -9,7 +9,9 @@ import java.time.Duration;
  *
  * @param transport         how to reach the devices
  * @param humidityThreshold soil humidity in percent below which watering is triggered
- * @param wateringCooldown  minimum time between two watering commands to the same device
+ * @param wateringCooldown  minimum time between two watering commands to the same device; long
+ *                          enough for the pump to run and the next reading to arrive, short
+ *                          enough that a fast-running simulation is not left to die
  */
 public record ControllerConfig(Transport transport, double humidityThreshold, Duration wateringCooldown) {
 
@@ -26,6 +28,6 @@ public record ControllerConfig(Transport transport, double humidityThreshold, Du
         return new ControllerConfig(
                 Transport.fromEnvironment(env),
                 env.optionalDouble(HUMIDITY_THRESHOLD, 25.0),
-                env.optionalSeconds(WATERING_COOLDOWN, Duration.ofSeconds(60)));
+                env.optionalSeconds(WATERING_COOLDOWN, Duration.ofSeconds(15)));
     }
 }

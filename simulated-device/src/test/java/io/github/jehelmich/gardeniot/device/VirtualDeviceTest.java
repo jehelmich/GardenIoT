@@ -23,7 +23,6 @@ class VirtualDeviceTest {
 
     private final RecordingTransport transport = new RecordingTransport();
     private final Metrics metrics = new Metrics();
-    private final PlantSimulation plant = new PlantSimulation(15.0, 15.0, new Random(1L));
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     /** Runs actions inline so their outcome is visible immediately. */
     private final Executor actions = Runnable::run;
@@ -34,7 +33,9 @@ class VirtualDeviceTest {
     void connect() throws Exception {
         device = new VirtualDevice(
                 "basil",
-                plant,
+                PlantProfile.DEFAULT,
+                WeatherProvider.fixed(WeatherConditions.CLEAR),
+                new Random(1L),
                 Duration.ofHours(1),
                 Duration.ZERO,
                 Clock.fixed(NOW, ZoneOffset.UTC),
@@ -68,11 +69,11 @@ class VirtualDeviceTest {
     @Test
     void wateringSoaksTheSoilAndCountsTheWatering() {
         IntStream.range(0, 20).forEach(i -> device.tick());
-        double before = plant.current().humidity();
+        double before = device.plant().current().humidity();
 
         device.startWatering();
 
-        assertThat(plant.current().humidity()).isEqualTo(100.0).isGreaterThan(before);
+        assertThat(device.plant().current().humidity()).isGreaterThan(before);
         SimulationState state = (SimulationState) transport.state.get(SimulationState.NAME);
         assertThat(state.waterings()).isEqualTo(1);
         assertThat(state.lastWatered()).isEqualTo(NOW);
@@ -130,6 +131,42 @@ class VirtualDeviceTest {
                 .contains("gardeniot_device_sensor_fault_code{device=\"basil\"} 2.0")
                 .contains("gardeniot_device_true_humidity_percent{device=\"basil\"}")
                 .contains("gardeniot_device_reported_humidity_percent{device=\"basil\"}");
+    }
+
+    @Test
+    void reportsItsWateringProfileOnConnect() {
+        assertThat(transport.state).containsKey("profile");
+        assertThat(transport.state.get("profile").toString()).contains("Basil");
+    }
+
+    @Test
+    void theTechnicianRepairsTheSensor() {
+        device.setFault(SensorFault.STUCK);
+
+        assertThat(device.callTechnician()).isTrue();
+
+        assertThat(device.state().fault()).isEqualTo(SensorFault.NONE);
+        assertThat(device.state().job()).isNull();
+    }
+
+    @Test
+    void repottingPutsAFreshSeedlingInThePot() {
+        IntStream.range(0, 3_000).forEach(i -> device.tick());
+        assertThat(device.state().alive()).isFalse();
+
+        assertThat(device.repot()).isTrue();
+
+        assertThat(device.state().alive()).isTrue();
+        assertThat(device.state().repots()).isEqualTo(1);
+        assertThat(device.state().profile()).isEqualTo("basil");
+    }
+
+    @Test
+    void weatherChangesShowUpInTheState() {
+        device.setWeather(WeatherProvider.fixed(WeatherConditions.RAIN));
+
+        assertThat(device.state().weather()).isEqualTo(WeatherConditions.Kind.RAIN);
+        assertThat(device.state().weatherLabel()).isEqualTo("Rain, 15 °C");
     }
 
     @Test

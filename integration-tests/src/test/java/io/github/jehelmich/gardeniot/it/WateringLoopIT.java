@@ -12,11 +12,13 @@ import io.github.jehelmich.gardeniot.device.DeviceConfig;
 import io.github.jehelmich.gardeniot.device.DeviceFleet;
 import io.github.jehelmich.gardeniot.device.DeviceMetrics;
 import io.github.jehelmich.gardeniot.device.VirtualDevice;
+import io.github.jehelmich.gardeniot.device.WeatherProviders;
 import io.github.jehelmich.gardeniot.observability.Metrics;
 import io.github.jehelmich.gardeniot.telemetry.Telemetry;
 import io.github.jehelmich.gardeniot.transport.CommandResult;
 import io.github.jehelmich.gardeniot.transport.FleetChannel;
 import io.github.jehelmich.gardeniot.transport.mqtt.MqttCommandSender;
+import io.github.jehelmich.gardeniot.transport.mqtt.MqttDeviceProfileSource;
 import io.github.jehelmich.gardeniot.transport.mqtt.MqttDeviceTransportFactory;
 import io.github.jehelmich.gardeniot.transport.mqtt.MqttSettings;
 import io.github.jehelmich.gardeniot.transport.mqtt.MqttTelemetrySource;
@@ -50,6 +52,7 @@ class WateringLoopIT {
     private FleetChannel fleetChannel;
     private MqttTelemetrySource source;
     private MqttCommandSender commands;
+    private MqttDeviceProfileSource profiles;
     private final List<Telemetry> seen = new CopyOnWriteArrayList<>();
     private final AtomicReference<Throwable> streamFailure = new AtomicReference<>();
 
@@ -60,7 +63,7 @@ class WateringLoopIT {
         // device side
         deviceTransports = new MqttDeviceTransportFactory(settings);
         fleet = new DeviceFleet(
-                new DeviceConfig(Transport.MQTT, List.of(), TICK, Duration.ZERO),
+                new DeviceConfig(Transport.MQTT, List.of(), TICK, Duration.ZERO, WeatherProviders.Setting.of("clear")),
                 deviceTransports,
                 Clock.systemUTC(),
                 new DeviceMetrics(new Metrics()));
@@ -69,9 +72,10 @@ class WateringLoopIT {
 
         // cloud side
         commands = new MqttCommandSender(settings).start();
+        profiles = new MqttDeviceProfileSource(settings).start();
         WateringPolicy policy = new WateringPolicy(25.0, Duration.ofSeconds(2), Clock.systemUTC());
         TelemetryProcessor processor = new TelemetryProcessor(
-                policy, new CommandWateringActuator(commands), new ControllerMetrics(new Metrics()));
+                policy, new CommandWateringActuator(commands), profiles, new ControllerMetrics(new Metrics()));
         source = new MqttTelemetrySource(settings);
         source.start(
                 telemetry -> {
@@ -85,6 +89,7 @@ class WateringLoopIT {
     void stopBothSides() {
         source.close();
         commands.close();
+        profiles.close();
         fleetChannel.close();
         fleet.close();
         deviceTransports.close();
@@ -101,8 +106,21 @@ class WateringLoopIT {
                 .untilAsserted(() -> assertThat(basil.state().waterings()).isGreaterThanOrEqualTo(1));
         await().atMost(Duration.ofSeconds(20))
                 .untilAsserted(
-                        () -> assertThat(seen).anyMatch(t -> t.deviceId().equals("basil") && t.humidity() > 90.0));
+                        () -> assertThat(seen).anyMatch(t -> t.deviceId().equals("basil") && t.humidity() > 60.0));
         assertThat(streamFailure.get()).isNull();
+    }
+
+    @Test
+    void theControllerLearnsEachPlantsNeedsFromItsReportedState() throws Exception {
+        fleet.add("cactus");
+
+        await().atMost(Duration.ofSeconds(10))
+                .untilAsserted(() -> assertThat(profiles.profileOf("cactus"))
+                        .map(p -> p.name())
+                        .contains("Prickly pear"));
+        // 26% soil is bone dry for a basil but fine for a cactus: no watering.
+        Thread.sleep(TICK.toMillis() * 10);
+        assertThat(commands.send("cactus", "status", null).payload().toString()).contains("\"waterings\":0");
     }
 
     @Test
@@ -122,8 +140,11 @@ class WateringLoopIT {
 
     @Test
     void theFleetChannelAddsPlantsAndABrokenSensorGoesUnwatered() throws Exception {
-        CommandResult added = commands.sendToFleet("addPlant", java.util.Map.of("deviceId", "thyme"));
+        // A lavender is comfortable at the starting humidity, so nothing waters it before the fault.
+        CommandResult added =
+                commands.sendToFleet("addPlant", java.util.Map.of("deviceId", "thyme", "profile", "lavender"));
         assertThat(added.status()).isEqualTo(200);
+        assertThat(added.payload().toString()).contains("lavender");
         assertThat(fleet.deviceIds()).contains("thyme");
 
         // Freeze the sensor at its first (damp) reading: the soil dries but the controller never learns.

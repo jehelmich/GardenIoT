@@ -4,11 +4,14 @@ import io.github.jehelmich.gardeniot.config.Environment;
 import io.github.jehelmich.gardeniot.observability.Metrics;
 import io.github.jehelmich.gardeniot.observability.ObservabilityServer;
 import io.github.jehelmich.gardeniot.transport.DeviceCommandSender;
+import io.github.jehelmich.gardeniot.transport.DeviceProfileSource;
 import io.github.jehelmich.gardeniot.transport.TelemetrySource;
 import io.github.jehelmich.gardeniot.transport.azure.AzureCommandSender;
+import io.github.jehelmich.gardeniot.transport.azure.AzureDeviceProfileSource;
 import io.github.jehelmich.gardeniot.transport.azure.AzureServiceSettings;
 import io.github.jehelmich.gardeniot.transport.azure.AzureTelemetrySource;
 import io.github.jehelmich.gardeniot.transport.mqtt.MqttCommandSender;
+import io.github.jehelmich.gardeniot.transport.mqtt.MqttDeviceProfileSource;
 import io.github.jehelmich.gardeniot.transport.mqtt.MqttSettings;
 import io.github.jehelmich.gardeniot.transport.mqtt.MqttTelemetrySource;
 import java.time.Clock;
@@ -36,6 +39,7 @@ public final class ControllerApp {
         ControllerConfig config;
         TelemetrySource source;
         DeviceCommandSender commands;
+        DeviceProfileSource profiles;
         AutoCloseable commandsResource;
         try {
             config = ControllerConfig.fromEnvironment(env);
@@ -44,14 +48,20 @@ public final class ControllerApp {
                     AzureServiceSettings azure = AzureServiceSettings.fromEnvironment(env);
                     source = new AzureTelemetrySource(azure);
                     commands = new AzureCommandSender(azure);
+                    profiles = new AzureDeviceProfileSource(azure);
                     commandsResource = () -> {};
                 }
                 case MQTT -> {
                     MqttSettings mqtt = MqttSettings.fromEnvironment(env);
                     source = new MqttTelemetrySource(mqtt);
                     MqttCommandSender sender = new MqttCommandSender(mqtt);
+                    MqttDeviceProfileSource profileSource = new MqttDeviceProfileSource(mqtt);
                     commands = sender;
-                    commandsResource = sender;
+                    profiles = profileSource;
+                    commandsResource = () -> {
+                        sender.close();
+                        profileSource.close();
+                    };
                 }
                 default -> throw new IllegalStateException("Unsupported transport " + config.transport());
             }
@@ -66,8 +76,8 @@ public final class ControllerApp {
         ObservabilityServer observability = ObservabilityServer.start(env, metrics, ready::get);
         WateringPolicy policy =
                 new WateringPolicy(config.humidityThreshold(), config.wateringCooldown(), Clock.systemUTC());
-        TelemetryProcessor processor =
-                new TelemetryProcessor(policy, new CommandWateringActuator(commands), new ControllerMetrics(metrics));
+        TelemetryProcessor processor = new TelemetryProcessor(
+                policy, new CommandWateringActuator(commands), profiles, new ControllerMetrics(metrics));
 
         CountDownLatch stopped = new CountDownLatch(1);
         AtomicInteger exitCode = new AtomicInteger(0);
@@ -92,6 +102,9 @@ public final class ControllerApp {
 
         if (commands instanceof MqttCommandSender mqtt) {
             mqtt.start();
+        }
+        if (profiles instanceof MqttDeviceProfileSource mqttProfiles) {
+            mqttProfiles.start();
         }
         source.start(processor::onTelemetry, error -> {
             log.error("Telemetry stream failed: {}", error.getMessage());
