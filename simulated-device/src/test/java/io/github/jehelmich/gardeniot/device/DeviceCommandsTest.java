@@ -1,6 +1,7 @@
 package io.github.jehelmich.gardeniot.device;
 
 import io.github.jehelmich.gardeniot.transport.CommandResult;
+import io.github.jehelmich.gardeniot.observability.Metrics;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,7 +23,7 @@ class DeviceCommandsTest {
     @BeforeEach
     void connect() throws Exception {
         device = new VirtualDevice("basil", new PlantSimulation(15.0, 15.0, new Random(1L)),
-                Duration.ofHours(1), Duration.ZERO, Clock.systemUTC(), scheduler, Runnable::run);
+                Duration.ofHours(1), Duration.ZERO, Clock.systemUTC(), scheduler, Runnable::run, new DeviceMetrics(new Metrics()));
         device.start(transport);
     }
 

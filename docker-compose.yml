@@ -2,8 +2,9 @@
 #
 #   docker compose up --build
 #
-# Two plants (basil, mint) dry out, the controller waters them. Watch the logs, or open the
-# monitoring page at http://localhost:8088 once the garden-ui service is up.
+# Two plants (basil, mint) dry out, the controller waters them. Watch the logs, or open
+#   http://localhost:3000   Grafana, with the GardenIoT dashboard provisioned
+#   http://localhost:9090   Prometheus
 #
 # Add a third device process with its own plant:
 #   docker compose run -d -e DEVICE_IDS=thyme device
@@ -34,6 +35,8 @@ services:
       MQTT_HOST: mosquitto
       HUMIDITY_THRESHOLD: ${HUMIDITY_THRESHOLD:-25}
       WATERING_COOLDOWN_SECONDS: ${WATERING_COOLDOWN_SECONDS:-60}
+    ports:
+      - "8081:8080"
     depends_on:
       mosquitto:
         condition: service_healthy
@@ -54,3 +57,33 @@ services:
       mosquitto:
         condition: service_healthy
     restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.13.3
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=2d
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - controller
+      - device
+
+  grafana:
+    image: grafana/grafana:13.0.8
+    ports:
+      - "3000:3000"
+    environment:
+      # A demo, so no login: anyone who can reach the port is an admin.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus

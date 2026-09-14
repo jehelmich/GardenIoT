@@ -47,6 +47,7 @@ final class DeviceCommands implements CommandHandler {
     @Override
     public CommandResult handle(String command, String payloadJson) {
         log.info("{}: command '{}' {}", device.deviceId(), command, payloadJson == null ? "" : payloadJson);
+        device.commandReceived(command);
         JsonElement payload;
         try {
             payload = Json.tree(payloadJson);

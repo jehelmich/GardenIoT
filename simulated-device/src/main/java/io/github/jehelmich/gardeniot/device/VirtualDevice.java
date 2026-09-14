@@ -34,6 +34,7 @@ public final class VirtualDevice implements AutoCloseable {
     private final Clock clock;
     private final ScheduledExecutorService scheduler;
     private final Executor actions;
+    private final DeviceMetrics metrics;
 
     private DeviceTransport transport;
     private volatile double speed = 1.0;
@@ -50,7 +51,9 @@ public final class VirtualDevice implements AutoCloseable {
                          Duration actionDuration,
                          Clock clock,
                          ScheduledExecutorService scheduler,
-                         Executor actions) {
+                         Executor actions,
+                         DeviceMetrics metrics) {
+        this.metrics = metrics;
         this.deviceId = deviceId;
         this.plant = plant;
         this.baseInterval = telemetryInterval;
@@ -81,6 +84,7 @@ public final class VirtualDevice implements AutoCloseable {
                 plant.water();
                 waterings++;
                 lastWatered = clock.instant();
+                metrics.watered(deviceId);
                 log.info("{}: watered", deviceId);
                 reportState();
             } catch (InterruptedException e) {
@@ -100,6 +104,10 @@ public final class VirtualDevice implements AutoCloseable {
                 Thread.currentThread().interrupt();
             }
         });
+    }
+
+    void commandReceived(String command) {
+        metrics.command(deviceId, command);
     }
 
     void setSpeed(double factor) {
@@ -125,6 +133,7 @@ public final class VirtualDevice implements AutoCloseable {
     void tick() {
         Reading truth = plant.next();
         Reading reading = fault.apply(truth, lastReported);
+        metrics.tick(deviceId, truth, reading, fault, speed);
         try {
             if (reading == null) {
                 log.info("{}: sensor silent (true humidity {})", deviceId, format(truth.humidity()));

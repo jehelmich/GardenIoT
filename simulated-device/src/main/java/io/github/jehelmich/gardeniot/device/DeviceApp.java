@@ -1,6 +1,8 @@
 package io.github.jehelmich.gardeniot.device;
 
 import io.github.jehelmich.gardeniot.config.Environment;
+import io.github.jehelmich.gardeniot.observability.Metrics;
+import io.github.jehelmich.gardeniot.observability.ObservabilityServer;
 import io.github.jehelmich.gardeniot.transport.DeviceTransportFactory;
 import io.github.jehelmich.gardeniot.transport.FleetChannel;
 import io.github.jehelmich.gardeniot.transport.azure.AzureDeviceSettings;
@@ -14,6 +16,7 @@ import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Entry point of the device process.
@@ -54,14 +57,21 @@ public final class DeviceApp {
             return;
         }
 
-        DeviceFleet fleet = new DeviceFleet(config, transports, Clock.systemUTC());
+        Metrics metrics = new Metrics();
+        AtomicBoolean ready = new AtomicBoolean();
+        ObservabilityServer observability = ObservabilityServer.start(env, metrics, ready::get);
+        DeviceFleet fleet = new DeviceFleet(config, transports, Clock.systemUTC(), new DeviceMetrics(metrics));
         Optional<FleetChannel> fleetChannel = transports.fleetChannel();
         CountDownLatch stopped = new CountDownLatch(1);
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             log.info("Shutting down");
+            ready.set(false);
             fleetChannel.ifPresent(FleetChannel::close);
             fleet.close();
             transports.close();
+            if (observability != null) {
+                observability.close();
+            }
             stopped.countDown();
         }, "shutdown"));
 
@@ -72,6 +82,7 @@ public final class DeviceApp {
             fleetChannel.get().subscribe(fleet);
             log.info("Accepting fleet commands");
         }
+        ready.set(true);
         log.info("Hosting {} over {}; publishing every {}s. Press Ctrl-C to stop.",
                 fleet.deviceIds(), config.transport(), config.telemetryInterval().toSeconds());
         stopped.await();

@@ -2,11 +2,14 @@ package io.github.jehelmich.gardeniot.it;
 
 import io.github.jehelmich.gardeniot.config.Transport;
 import io.github.jehelmich.gardeniot.controller.CommandWateringActuator;
+import io.github.jehelmich.gardeniot.controller.ControllerMetrics;
 import io.github.jehelmich.gardeniot.controller.TelemetryProcessor;
 import io.github.jehelmich.gardeniot.controller.WateringPolicy;
 import io.github.jehelmich.gardeniot.device.DeviceConfig;
 import io.github.jehelmich.gardeniot.device.DeviceFleet;
+import io.github.jehelmich.gardeniot.device.DeviceMetrics;
 import io.github.jehelmich.gardeniot.device.VirtualDevice;
+import io.github.jehelmich.gardeniot.observability.Metrics;
 import io.github.jehelmich.gardeniot.telemetry.Telemetry;
 import io.github.jehelmich.gardeniot.transport.CommandResult;
 import io.github.jehelmich.gardeniot.transport.FleetChannel;
@@ -58,14 +61,15 @@ class WateringLoopIT {
         // device side
         deviceTransports = new MqttDeviceTransportFactory(settings);
         fleet = new DeviceFleet(new DeviceConfig(Transport.MQTT, List.of(), TICK, Duration.ZERO),
-                deviceTransports, Clock.systemUTC());
+                deviceTransports, Clock.systemUTC(), new DeviceMetrics(new Metrics()));
         fleetChannel = deviceTransports.fleetChannel().orElseThrow();
         fleetChannel.subscribe(fleet);
 
         // cloud side
         commands = new MqttCommandSender(settings).start();
         WateringPolicy policy = new WateringPolicy(25.0, Duration.ofSeconds(2), Clock.systemUTC());
-        TelemetryProcessor processor = new TelemetryProcessor(policy, new CommandWateringActuator(commands));
+        TelemetryProcessor processor = new TelemetryProcessor(policy, new CommandWateringActuator(commands),
+                new ControllerMetrics(new Metrics()));
         source = new MqttTelemetrySource(settings);
         source.start(telemetry -> {
             seen.add(telemetry);

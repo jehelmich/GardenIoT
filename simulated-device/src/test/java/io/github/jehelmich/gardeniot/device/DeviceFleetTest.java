@@ -1,6 +1,7 @@
 package io.github.jehelmich.gardeniot.device;
 
 import io.github.jehelmich.gardeniot.config.Transport;
+import io.github.jehelmich.gardeniot.observability.Metrics;
 import io.github.jehelmich.gardeniot.transport.CommandResult;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -16,7 +17,7 @@ class DeviceFleetTest {
     private final RecordingTransport transport = new RecordingTransport();
     private final DeviceFleet fleet = new DeviceFleet(
             new DeviceConfig(Transport.MQTT, List.of(), Duration.ofHours(1), Duration.ZERO),
-            transport, Clock.systemUTC());
+            transport, Clock.systemUTC(), new DeviceMetrics(new Metrics()));
 
     @AfterEach
     void close() {

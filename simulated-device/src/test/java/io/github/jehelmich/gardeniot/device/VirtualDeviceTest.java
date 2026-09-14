@@ -1,5 +1,6 @@
 package io.github.jehelmich.gardeniot.device;
 
+import io.github.jehelmich.gardeniot.observability.Metrics;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,7 @@ class VirtualDeviceTest {
     private static final Instant NOW = Instant.parse("2017-07-17T10:15:30Z");
 
     private final RecordingTransport transport = new RecordingTransport();
+    private final Metrics metrics = new Metrics();
     private final PlantSimulation plant = new PlantSimulation(15.0, 15.0, new Random(1L));
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     /** Runs actions inline so their outcome is visible immediately. */
@@ -31,7 +33,7 @@ class VirtualDeviceTest {
     @BeforeEach
     void connect() throws Exception {
         device = new VirtualDevice("basil", plant, Duration.ofHours(1), Duration.ZERO,
-                Clock.fixed(NOW, ZoneOffset.UTC), scheduler, actions);
+                Clock.fixed(NOW, ZoneOffset.UTC), scheduler, actions, new DeviceMetrics(metrics));
         device.start(transport);
         // The first tick is scheduled immediately; wait for it so tests start from a known count.
         IntStream.range(0, 100).takeWhile(i -> transport.published.isEmpty()).forEach(i -> sleep(10));
@@ -109,6 +111,18 @@ class VirtualDeviceTest {
         transport.failure = new IllegalStateException("broker gone");
 
         assertThatNoException().isThrownBy(device::tick);
+    }
+
+    @Test
+    void exposesTheTruthNextToTheReading() {
+        device.setFault(SensorFault.OVERREAD);
+
+        device.tick();
+
+        assertThat(metrics.scrape())
+                .contains("gardeniot_device_sensor_fault_code{device=\"basil\"} 2.0")
+                .contains("gardeniot_device_true_humidity_percent{device=\"basil\"}")
+                .contains("gardeniot_device_reported_humidity_percent{device=\"basil\"}");
     }
 
     @Test

@@ -40,21 +40,23 @@ public final class DeviceFleet implements CommandHandler, AutoCloseable {
     private final DeviceConfig config;
     private final DeviceTransportFactory transports;
     private final Clock clock;
+    private final DeviceMetrics metrics;
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
     private final ExecutorService actions = Executors.newCachedThreadPool();
     private final Map<String, VirtualDevice> devices = new ConcurrentHashMap<>();
 
-    public DeviceFleet(DeviceConfig config, DeviceTransportFactory transports, Clock clock) {
+    public DeviceFleet(DeviceConfig config, DeviceTransportFactory transports, Clock clock, DeviceMetrics metrics) {
         this.config = config;
         this.transports = transports;
         this.clock = clock;
+        this.metrics = metrics;
     }
 
     public VirtualDevice add(String deviceId) throws Exception {
         DeviceConfig.requireValidId(deviceId);
         VirtualDevice device = new VirtualDevice(deviceId,
                 new PlantSimulation(MIN_TEMPERATURE, MIN_HUMIDITY, new Random()),
-                config.telemetryInterval(), config.actionDuration(), clock, scheduler, actions);
+                config.telemetryInterval(), config.actionDuration(), clock, scheduler, actions, metrics);
         if (devices.putIfAbsent(deviceId, device) != null) {
             throw new IllegalStateException("Device '" + deviceId + "' is already hosted here");
         }
@@ -73,6 +75,7 @@ public final class DeviceFleet implements CommandHandler, AutoCloseable {
             return false;
         }
         device.close();
+        metrics.forget(deviceId);
         return true;
     }
 

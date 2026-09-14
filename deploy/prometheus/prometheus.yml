@@ -1,0 +1,21 @@
+# Scrapes every GardenIoT process. Device processes are discovered through Docker's DNS, so
+# `docker compose up --scale device=3` shows up without editing this file.
+global:
+  scrape_interval: 5s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: controller
+    static_configs:
+      - targets: ["controller:8080"]
+
+  - job_name: device
+    dns_sd_configs:
+      - names: ["device"]
+        type: A
+        port: 8080
+        refresh_interval: 15s
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

@@ -17,13 +17,16 @@ public final class TelemetryProcessor {
 
     private final WateringPolicy policy;
     private final WateringActuator actuator;
+    private final ControllerMetrics metrics;
 
-    public TelemetryProcessor(WateringPolicy policy, WateringActuator actuator) {
+    public TelemetryProcessor(WateringPolicy policy, WateringActuator actuator, ControllerMetrics metrics) {
         this.policy = policy;
         this.actuator = actuator;
+        this.metrics = metrics;
     }
 
     public void onTelemetry(Telemetry telemetry) {
+        metrics.telemetryReceived(telemetry);
         log.info("{}: temperature={}°C humidity={}%", telemetry.deviceId(),
                 String.format("%.1f", telemetry.temperature()),
                 String.format("%.1f", telemetry.humidity()));
@@ -34,7 +37,9 @@ public final class TelemetryProcessor {
         log.info("{}: soil is dry, requesting watering", telemetry.deviceId());
         try {
             actuator.water(telemetry.deviceId());
+            metrics.wateringCommand(telemetry.deviceId(), "accepted");
         } catch (CommandException e) {
+            metrics.wateringCommand(telemetry.deviceId(), "failed");
             log.warn("{}: {}", telemetry.deviceId(), e.getMessage());
         }
     }

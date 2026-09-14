@@ -1,6 +1,8 @@
 package io.github.jehelmich.gardeniot.controller;
 
 import io.github.jehelmich.gardeniot.config.Environment;
+import io.github.jehelmich.gardeniot.observability.Metrics;
+import io.github.jehelmich.gardeniot.observability.ObservabilityServer;
 import io.github.jehelmich.gardeniot.transport.DeviceCommandSender;
 import io.github.jehelmich.gardeniot.transport.TelemetrySource;
 import io.github.jehelmich.gardeniot.transport.azure.AzureCommandSender;
@@ -61,8 +63,12 @@ public final class ControllerApp {
             return;
         }
 
+        Metrics metrics = new Metrics();
+        AtomicBoolean ready = new AtomicBoolean();
+        ObservabilityServer observability = ObservabilityServer.start(env, metrics, ready::get);
         WateringPolicy policy = new WateringPolicy(config.humidityThreshold(), config.wateringCooldown(), Clock.systemUTC());
-        TelemetryProcessor processor = new TelemetryProcessor(policy, new CommandWateringActuator(commands));
+        TelemetryProcessor processor = new TelemetryProcessor(policy, new CommandWateringActuator(commands),
+                new ControllerMetrics(metrics));
 
         CountDownLatch stopped = new CountDownLatch(1);
         AtomicInteger exitCode = new AtomicInteger(0);
@@ -71,7 +77,11 @@ public final class ControllerApp {
         Runnable close = () -> {
             if (closed.compareAndSet(false, true)) {
                 log.info("Shutting down");
+                ready.set(false);
                 source.close();
+                if (observability != null) {
+                    observability.close();
+                }
                 try {
                     commandsResource.close();
                 } catch (Exception e) {
@@ -89,6 +99,7 @@ public final class ControllerApp {
             exitCode.set(1);
             stopped.countDown();
         });
+        ready.set(true);
         log.info("Watching telemetry over {}; watering below {}% humidity. Press Ctrl-C to stop.",
                 config.transport(), config.humidityThreshold());
         stopped.await();
