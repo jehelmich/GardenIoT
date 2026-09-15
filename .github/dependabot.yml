@@ -11,6 +11,11 @@ updates:
         patterns: ["org.apache.maven.plugins:*", "org.jacoco:*", "com.diffplug.spotless:*"]
       test:
         patterns: ["org.junit*", "org.assertj*", "org.testcontainers*", "org.awaitility*"]
+  # docker-compose.yml pins the same images as the chart; keep both moving.
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: monthly
   - package-ecosystem: github-actions
     directory: /
     schedule:

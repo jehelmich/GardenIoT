@@ -223,3 +223,13 @@ jobs:
           kubectl -n gardeniot port-forward svc/gardeniot-prometheus 9090:9090 &
           sleep 5
           curl -sf 'http://localhost:9090/api/v1/query?query=gardeniot_device_true_humidity_percent' | grep -q '"device":"basil"'
+
+      - name: Cluster diagnostics
+        if: failure()
+        run: |
+          kubectl -n gardeniot get pods -o wide || true
+          for pod in $(kubectl -n gardeniot get pods -o name); do
+            echo "=== $pod"
+            kubectl -n gardeniot describe "$pod" | sed -n '/^Events/,$p' | tail -15
+            kubectl -n gardeniot logs "$pod" --tail=40 --all-containers || true
+          done
