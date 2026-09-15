@@ -30,7 +30,7 @@ done
 helm upgrade --install gardeniot "$CHART" \
   --namespace "$NAMESPACE" --create-namespace \
   --set image.tag="$TAG" --set image.pullPolicy=Never \
-  --wait --timeout 5m "$@"
+  --wait --timeout 10m "$@"
 
 echo
 kubectl -n "$NAMESPACE" get pods

@@ -12,24 +12,35 @@ class SensorFaultTest {
 
     @Test
     void healthySensorReportsTheTruth() {
-        assertThat(SensorFault.NONE.apply(TRUTH, PREVIOUS)).isEqualTo(TRUTH);
+        assertThat(SensorFault.NONE.apply(TRUTH, PREVIOUS, 5)).isEqualTo(TRUTH);
     }
 
     @Test
     void stuckSensorRepeatsThePreviousHumidity() {
-        assertThat(SensorFault.STUCK.apply(TRUTH, PREVIOUS)).isEqualTo(new Reading(22.0, 55.0));
-        assertThat(SensorFault.STUCK.apply(TRUTH, null)).isEqualTo(TRUTH);
+        assertThat(SensorFault.STUCK.apply(TRUTH, PREVIOUS, 5)).isEqualTo(new Reading(22.0, 55.0));
+        assertThat(SensorFault.STUCK.apply(TRUTH, null, 5)).isEqualTo(TRUTH);
     }
 
     @Test
     void overreadingSensorAddsAMarginButStaysWithinRange() {
-        assertThat(SensorFault.OVERREAD.apply(TRUTH, PREVIOUS).humidity()).isEqualTo(60.0);
-        assertThat(SensorFault.OVERREAD.apply(new Reading(22.0, 90.0), null).humidity())
+        assertThat(SensorFault.OVERREAD.apply(TRUTH, PREVIOUS, 5).humidity()).isEqualTo(60.0);
+        assertThat(SensorFault.OVERREAD.apply(new Reading(22.0, 90.0), null, 5).humidity())
+                .isEqualTo(100.0);
+    }
+
+    @Test
+    void driftingSensorCreepsUpwardsOverTime() {
+        assertThat(SensorFault.DRIFT.apply(TRUTH, null, 0).humidity()).isEqualTo(20.0);
+        assertThat(SensorFault.DRIFT.apply(TRUTH, null, 100).humidity()).isEqualTo(35.0);
+        assertThat(SensorFault.DRIFT.apply(TRUTH, null, 10_000).humidity()).isEqualTo(65.0);
+        assertThat(SensorFault.DRIFT
+                        .apply(new Reading(22.0, 90.0), null, 10_000)
+                        .humidity())
                 .isEqualTo(100.0);
     }
 
     @Test
     void silentSensorReportsNothing() {
-        assertThat(SensorFault.SILENT.apply(TRUTH, PREVIOUS)).isNull();
+        assertThat(SensorFault.SILENT.apply(TRUTH, PREVIOUS, 5)).isNull();
     }
 }

@@ -13,9 +13,16 @@ import java.util.List;
  * @param deviceIds         the plants this process starts with; empty means "let the transport decide"
  * @param telemetryInterval how often a reading is published at simulation speed 1
  * @param actionDuration    how long the simulated pump and reboot take at speed 1
+ * @param weather           the weather every plant starts under; see {@link WeatherProviders}
+ * @param wearMeanTicks     average readings between random breakages; 0 for none
  */
 public record DeviceConfig(
-        Transport transport, List<String> deviceIds, Duration telemetryInterval, Duration actionDuration) {
+        Transport transport,
+        List<String> deviceIds,
+        Duration telemetryInterval,
+        Duration actionDuration,
+        WeatherProviders.Setting weather,
+        long wearMeanTicks) {
 
     public static final String DEVICE_IDS = "DEVICE_IDS";
     /** For replicated deployments: a list of names and this replica's index into it. */
@@ -24,13 +31,29 @@ public record DeviceConfig(
     public static final String PLANT_INDEX = "PLANT_INDEX";
     public static final String TELEMETRY_INTERVAL = "TELEMETRY_INTERVAL_SECONDS";
     public static final String ACTION_DURATION = "ACTION_DURATION_SECONDS";
+    public static final String WEATHER = "WEATHER";
+    public static final String WEATHER_LATITUDE = "WEATHER_LATITUDE";
+    public static final String WEATHER_LONGITUDE = "WEATHER_LONGITUDE";
+    public static final String WEATHER_PLACE = "WEATHER_PLACE";
+    public static final String WEAR_MEAN_TICKS = "WEAR_MEAN_TICKS";
 
     public static DeviceConfig fromEnvironment(Environment env) {
         return new DeviceConfig(
                 Transport.fromEnvironment(env),
                 deviceIds(env),
                 env.optionalSeconds(TELEMETRY_INTERVAL, Duration.ofSeconds(5)),
-                env.optionalSeconds(ACTION_DURATION, Duration.ofSeconds(5)));
+                env.optionalSeconds(ACTION_DURATION, Duration.ofSeconds(5)),
+                new WeatherProviders.Setting(
+                        env.optional(WEATHER, "clear"),
+                        optionalNumber(env, WEATHER_LATITUDE),
+                        optionalNumber(env, WEATHER_LONGITUDE),
+                        env.optional(WEATHER_PLACE, null)),
+                (long) env.optionalDouble(WEAR_MEAN_TICKS, 0));
+    }
+
+    private static Double optionalNumber(Environment env, String name) {
+        double value = env.optionalDouble(name, Double.NaN);
+        return Double.isNaN(value) ? null : value;
     }
 
     /**
