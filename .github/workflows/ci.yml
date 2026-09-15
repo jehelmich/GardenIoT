@@ -144,7 +144,7 @@ jobs:
 
       - name: Sign the image (keyless, Sigstore)
         if: github.event_name != 'pull_request'
-        uses: sigstore/cosign-installer@v4
+        uses: sigstore/cosign-installer@v4.1.2
       - if: github.event_name != 'pull_request'
         run: cosign sign --yes "${IMAGE}@${DIGEST}"
         env:

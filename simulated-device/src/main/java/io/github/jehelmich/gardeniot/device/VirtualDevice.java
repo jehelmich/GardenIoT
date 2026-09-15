@@ -2,11 +2,13 @@ package io.github.jehelmich.gardeniot.device;
 
 import io.github.jehelmich.gardeniot.device.PlantSimulation.Reading;
 import io.github.jehelmich.gardeniot.telemetry.Telemetry;
+import io.github.jehelmich.gardeniot.telemetry.WateringProfile;
 import io.github.jehelmich.gardeniot.transport.DeviceTransport;
 import io.github.jehelmich.gardeniot.transport.DeviceTransportFactory;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Random;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -15,19 +17,26 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * One simulated plant with its sensor, pump and connection.
+ * One simulated pot with its plant, sensor, pump and connection.
  *
  * <p>The telemetry loop reschedules itself after every reading so that a speed change takes
  * effect on the next tick. Commands come in on the transport's thread and only flip state;
- * anything slow (the pump, a reboot) runs on {@code actions}.
+ * anything slow — the pump, a reboot, the technician's drive over — runs on {@code actions}.
  */
 public final class VirtualDevice implements AutoCloseable {
 
+    static final String JOB_TECHNICIAN = "technician";
+    static final String JOB_REPOT = "repot";
+    static final String PUMP_OK = "OK";
+    static final String PUMP_FAILED = "FAILED";
+
     private static final Logger log = LoggerFactory.getLogger(VirtualDevice.class);
     private static final Duration MIN_INTERVAL = Duration.ofMillis(200);
+    private static final int TECHNICIAN_DELAY_FACTOR = 3;
+    private static final int REPOT_DELAY_FACTOR = 2;
 
     private final String deviceId;
-    private final PlantSimulation plant;
+    private final Random random;
     private final Duration baseInterval;
     private final Duration baseActionDuration;
     private final Clock clock;
@@ -35,38 +44,53 @@ public final class VirtualDevice implements AutoCloseable {
     private final Executor actions;
     private final DeviceMetrics metrics;
 
+    private volatile PlantSimulation plant;
+    private volatile WeatherProvider weather;
     private DeviceTransport transport;
     private volatile double speed = 1.0;
     private volatile SensorFault fault = SensorFault.NONE;
+    private volatile long ticksSinceFault;
+    private volatile boolean pumpFailed;
+    private final RandomFaults wear;
     private volatile Reading lastReported;
     private volatile int waterings;
+    private volatile int repots;
     private volatile Instant lastWatered;
+    private volatile String job;
+    private volatile Instant jobDoneAt;
     private volatile ScheduledFuture<?> nextTick;
     private volatile boolean closed;
 
     public VirtualDevice(
             String deviceId,
-            PlantSimulation plant,
+            PlantProfile profile,
+            WeatherProvider weather,
+            Random random,
             Duration telemetryInterval,
             Duration actionDuration,
+            long wearMeanTicks,
             Clock clock,
             ScheduledExecutorService scheduler,
             Executor actions,
             DeviceMetrics metrics) {
-        this.metrics = metrics;
         this.deviceId = deviceId;
-        this.plant = plant;
+        this.random = random;
+        this.wear = new RandomFaults(random, wearMeanTicks);
+        this.plant = new PlantSimulation(profile, random);
+        this.weather = weather;
         this.baseInterval = telemetryInterval;
         this.baseActionDuration = actionDuration;
         this.clock = clock;
         this.scheduler = scheduler;
         this.actions = actions;
+        this.metrics = metrics;
     }
 
-    /** Connects and starts publishing. */
+    /** Connects, tells the cloud what the plant needs, and starts publishing. */
     public void start(DeviceTransportFactory transports) throws Exception {
         transport = transports.connect(deviceId, new DeviceCommands(this));
-        log.info("{}: online", deviceId);
+        transport.reportState(WateringProfile.STATE_NAME, plant.profile().wateringProfile());
+        log.info("{}: online ({})", deviceId, plant.profile().name());
         scheduleNext(Duration.ZERO);
     }
 
@@ -74,9 +98,26 @@ public final class VirtualDevice implements AutoCloseable {
         return deviceId;
     }
 
+    PlantSimulation plant() {
+        return plant;
+    }
+
     // --- commands, called on the transport's thread ---------------------------------------
 
-    void startWatering() {
+    void commandReceived(String command) {
+        metrics.command(deviceId, command);
+    }
+
+    /**
+     * Runs the pump.
+     *
+     * @return false if the flow meter says nothing is coming out — a fault the device can see itself
+     */
+    boolean startWatering() {
+        if (pumpFailed) {
+            log.warn("{}: pump commanded but no flow detected", deviceId);
+            return false;
+        }
         actions.execute(() -> {
             try {
                 log.info("{}: watering...", deviceId);
@@ -91,6 +132,7 @@ public final class VirtualDevice implements AutoCloseable {
                 Thread.currentThread().interrupt();
             }
         });
+        return true;
     }
 
     void startReboot() {
@@ -106,8 +148,79 @@ public final class VirtualDevice implements AutoCloseable {
         });
     }
 
-    void commandReceived(String command) {
-        metrics.command(deviceId, command);
+    /**
+     * Sends for the technician, who recalibrates or replaces the sensor and fixes the pump.
+     *
+     * @return false if someone is already on the way
+     */
+    boolean callTechnician() {
+        return startJob(JOB_TECHNICIAN, TECHNICIAN_DELAY_FACTOR, () -> {
+            fault = SensorFault.NONE;
+            ticksSinceFault = 0;
+            lastReported = null;
+            pumpFailed = false;
+            log.info("{}: technician serviced the sensor and the pump", deviceId);
+        });
+    }
+
+    void setPumpFailed(boolean failed) {
+        pumpFailed = failed;
+        log.info("{}: pump {}", deviceId, failed ? "failed" : "repaired");
+        reportState();
+    }
+
+    void setWear(long meanTicks) {
+        wear.setMeanTicksBetweenFaults(meanTicks);
+        log.info("{}: wear every ~{} readings", deviceId, meanTicks);
+        reportState();
+    }
+
+    /** Something broke on its own. Visible for tests. */
+    void breakSomething(RandomFaults.Breakage breakage) {
+        log.warn("{}: {} — nobody has been told", deviceId, breakage);
+        switch (breakage) {
+            case SENSOR_STUCK -> setFault(SensorFault.STUCK);
+            case SENSOR_DRIFT -> setFault(SensorFault.DRIFT);
+            case SENSOR_SILENT -> setFault(SensorFault.SILENT);
+            case PUMP -> setPumpFailed(true);
+        }
+    }
+
+    /**
+     * Puts a fresh seedling of the same species in the pot.
+     *
+     * @return false if a job is already under way
+     */
+    boolean repot() {
+        return startJob(JOB_REPOT, REPOT_DELAY_FACTOR, () -> {
+            plant = new PlantSimulation(plant.profile(), random);
+            repots++;
+            log.info("{}: repotted", deviceId);
+        });
+    }
+
+    private synchronized boolean startJob(String name, int delayFactor, Runnable completion) {
+        if (job != null) {
+            return false;
+        }
+        Duration delay = scaled(baseActionDuration.multipliedBy(delayFactor));
+        job = name;
+        jobDoneAt = clock.instant().plus(delay);
+        log.info("{}: {} scheduled, done in {}s", deviceId, name, delay.toSeconds());
+        reportState();
+        actions.execute(() -> {
+            try {
+                Thread.sleep(delay);
+                completion.run();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                job = null;
+                jobDoneAt = null;
+                reportState();
+            }
+        });
+        return true;
     }
 
     void setSpeed(double factor) {
@@ -117,21 +230,41 @@ public final class VirtualDevice implements AutoCloseable {
 
     void setFault(SensorFault newFault) {
         fault = newFault;
+        ticksSinceFault = 0;
         log.info("{}: sensor fault {}", deviceId, newFault);
         reportState();
     }
 
+    void setWeather(WeatherProvider provider) {
+        weather = provider;
+        log.info("{}: weather now {}", deviceId, provider.current().label());
+        reportState();
+    }
+
     public SimulationState state() {
-        Reading truth = plant.current();
+        PlantSimulation current = plant;
+        Reading truth = current.current();
+        WeatherConditions conditions = weather.current();
         return new SimulationState(
+                current.profile().id(),
+                current.profile().name(),
                 truth.humidity(),
                 truth.temperature(),
-                plant.health(),
-                plant.growth(),
-                plant.isAlive(),
+                current.health(),
+                current.growth(),
+                current.isAlive(),
+                current.causeOfDeath(),
                 fault,
+                pumpFailed ? PUMP_FAILED : PUMP_OK,
+                wear.meanTicksBetweenFaults(),
                 speed,
+                conditions.kind(),
+                conditions.label(),
+                conditions.source(),
+                job,
+                jobDoneAt,
                 waterings,
+                repots,
                 lastWatered,
                 clock.instant());
     }
@@ -140,9 +273,16 @@ public final class VirtualDevice implements AutoCloseable {
 
     /** One tick: advance the plant, read the sensor, publish. Visible for tests. */
     void tick() {
-        Reading truth = plant.next();
-        Reading reading = fault.apply(truth, lastReported);
-        metrics.tick(deviceId, truth, reading, fault, speed, plant);
+        PlantSimulation current = plant;
+        Reading truth = current.next(weather.current());
+        if (fault == SensorFault.NONE && !pumpFailed && job == null) {
+            RandomFaults.Breakage breakage = wear.roll();
+            if (breakage != null) {
+                breakSomething(breakage);
+            }
+        }
+        Reading reading = fault.apply(truth, lastReported, ticksSinceFault++);
+        metrics.tick(deviceId, truth, reading, fault, pumpFailed, speed, current);
         try {
             if (reading == null) {
                 log.info("{}: sensor silent (true humidity {})", deviceId, format(truth.humidity()));

@@ -70,6 +70,31 @@ class GardenModelTest {
     }
 
     @Test
+    void keepsTheControllersAlertsUntilTheyAreCleared() {
+        model.apply(new BusMessage(Kind.ALERT, "basil", "sensorStuck", "{\"message\":\"frozen\"}"));
+
+        JsonObject basil = Json.tree(model.snapshot())
+                .getAsJsonObject()
+                .getAsJsonArray("plants")
+                .get(0)
+                .getAsJsonObject();
+        assertThat(basil.getAsJsonObject("alerts")
+                        .getAsJsonObject("sensorStuck")
+                        .get("message")
+                        .getAsString())
+                .isEqualTo("frozen");
+        assertThat(events.get(0)).contains("\"type\":\"alert\"").contains("sensorStuck");
+
+        model.apply(new BusMessage(Kind.ALERT, "basil", "sensorStuck", ""));
+        basil = Json.tree(model.snapshot())
+                .getAsJsonObject()
+                .getAsJsonArray("plants")
+                .get(0)
+                .getAsJsonObject();
+        assertThat(basil.getAsJsonObject("alerts").size()).isZero();
+    }
+
+    @Test
     void fleetCommandsAreEventsWithoutAPlant() {
         model.apply(new BusMessage(Kind.FLEET_COMMAND, null, "addPlant", "{\"deviceId\":\"thyme\"}"));
 

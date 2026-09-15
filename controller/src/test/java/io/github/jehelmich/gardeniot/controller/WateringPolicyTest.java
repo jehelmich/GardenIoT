@@ -57,6 +57,20 @@ class WateringPolicyTest {
     }
 
     @Test
+    void honoursThePlantsOwnThresholdWhenItReportedOne() {
+        java.util.Optional<io.github.jehelmich.gardeniot.telemetry.WateringProfile> cactus =
+                java.util.Optional.of(new io.github.jehelmich.gardeniot.telemetry.WateringProfile("Cactus", 5.0, 35.0));
+        java.util.Optional<io.github.jehelmich.gardeniot.telemetry.WateringProfile> fern =
+                java.util.Optional.of(new io.github.jehelmich.gardeniot.telemetry.WateringProfile("Fern", 55.0, 90.0));
+
+        assertThat(policy.shouldWater(reading("cactus", 10.0), cactus)).isFalse();
+        assertThat(policy.shouldWater(reading("cactus", 4.0), cactus)).isTrue();
+        assertThat(policy.shouldWater(reading("fern", 50.0), fern)).isTrue();
+        assertThat(policy.shouldWater(reading("plain", 50.0), java.util.Optional.empty()))
+                .isFalse();
+    }
+
+    @Test
     void doesNotRepeatWithinTheCooldown() {
         assertThat(policy.shouldWater(reading("garden-1", 10.0))).isTrue();
 

@@ -274,14 +274,19 @@
                   "index": 1
                 },
                 "2": {
-                  "text": "over-reading",
-                  "color": "red",
+                  "text": "drifting",
+                  "color": "orange",
                   "index": 2
                 },
                 "3": {
+                  "text": "over-reading",
+                  "color": "red",
+                  "index": 3
+                },
+                "4": {
                   "text": "silent",
                   "color": "dark-red",
-                  "index": 3
+                  "index": 4
                 }
               }
             }
@@ -299,11 +304,11 @@
               },
               {
                 "color": "red",
-                "value": 2
+                "value": 3
               },
               {
                 "color": "dark-red",
-                "value": 3
+                "value": 4
               }
             ]
           }

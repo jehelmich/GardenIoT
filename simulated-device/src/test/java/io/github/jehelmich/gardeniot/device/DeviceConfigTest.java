@@ -19,6 +19,22 @@ class DeviceConfigTest {
         assertThat(config.deviceIds()).isEmpty();
         assertThat(config.telemetryInterval()).isEqualTo(Duration.ofSeconds(5));
         assertThat(config.actionDuration()).isEqualTo(Duration.ofSeconds(5));
+        assertThat(config.weather().mode()).isEqualTo("clear");
+        assertThat(config.wearMeanTicks()).isZero();
+        assertThat(DeviceConfig.fromEnvironment(new Environment(Map.of(DeviceConfig.WEAR_MEAN_TICKS, "1500")))
+                        .wearMeanTicks())
+                .isEqualTo(1500);
+    }
+
+    @Test
+    void readsTheWeatherSetting() {
+        DeviceConfig config = DeviceConfig.fromEnvironment(new Environment(Map.of(
+                DeviceConfig.WEATHER, "real",
+                DeviceConfig.WEATHER_LATITUDE, "52.2",
+                DeviceConfig.WEATHER_LONGITUDE, "0.12",
+                DeviceConfig.WEATHER_PLACE, "Cambridge")));
+
+        assertThat(config.weather()).isEqualTo(new WeatherProviders.Setting("real", 52.2, 0.12, "Cambridge"));
     }
 
     @Test

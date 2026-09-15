@@ -23,6 +23,19 @@
   .control { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
   .control input[type=range] { width: 150px; accent-color: var(--green); }
   .control output { min-width: 3.2em; color: var(--ink); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .weather-now { color: var(--ink); font-weight: 600; }
+  .card .species { font-size: 12px; color: var(--muted); margin-top: -4px; }
+  .card .species i { font-style: italic; }
+  .bar .band { position: absolute; top: 0; bottom: 0; background: rgba(63,157,63,.22); }
+  .card .job { font-size: 12px; color: #1d5fa3; }
+  .card .alerts { display: flex; flex-direction: column; gap: 4px; }
+  .card .alert { font-size: 12px; background: #fff4e5; color: #8a4b00; border-left: 3px solid #e08a00; padding: 4px 8px; border-radius: 4px; }
+  .card .alert b { color: #5c3200; }
+  .card .pump { font-size: 12px; background: #fde8e4; color: #8b2e1c; border-left: 3px solid var(--red); padding: 4px 8px; border-radius: 4px; }
+  #log li.alert { color: #8a4b00; }
+  .badge.job { background: #e3edf9; color: #1d5fa3; }
+  .stage { position: relative; }
+  .stage .sky { position: absolute; top: 0; right: 4px; font-size: 18px; opacity: .8; }
   input[type=text] { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; width: 150px; background: #fff; }
   button, select { font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line);
     background: #fff; color: var(--ink); cursor: pointer; }
@@ -78,11 +91,32 @@
   <h1><span class="conn" id="conn"></span> GardenIoT <small>live garden</small></h1>
   <div class="controls">
     <label class="control" title="Runs every plant's simulation faster. Real time is 1x.">
-      Speed <input type="range" id="speed" min="0" max="6" step="1" value="0" list="speeds">
+      Speed <input type="range" id="speed" min="0" max="5" step="1" value="0">
       <output id="speedOut">1×</output>
     </label>
+    <label class="control" title="How often sensors and pumps break on their own">
+      <select id="wear">
+        <option value="0">breakdowns: never</option>
+        <option value="1500">breakdowns: now and then</option>
+        <option value="400">breakdowns: often</option>
+      </select>
+    </label>
+    <form class="control" id="weatherForm" title="The weather every pot stands in">
+      <span id="weatherNow" class="weather-now">—</span>
+      <select id="weatherMode">
+        <option value="clear">weather: clear</option>
+        <option value="rain">weather: rain</option>
+        <option value="drought">weather: drought</option>
+        <option value="heatwave">weather: heatwave</option>
+        <option value="cold">weather: cold snap</option>
+        <option value="auto">weather: changing</option>
+        <option value="real">weather: live from…</option>
+      </select>
+      <input type="text" id="weatherPlace" placeholder="a place, e.g. Lisbon" hidden>
+      <button type="submit" id="weatherApply" hidden>Set</button>
+    </form>
     <form class="control" id="addForm">
-      <input type="text" id="addName" placeholder="new plant name" pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,63}" maxlength="64" required>
+      <select id="addProfile" title="Species" required><option value="" disabled selected>choose a species…</option></select>
       <button class="primary" type="submit">Add plant</button>
     </form>
   </div>
@@ -96,7 +130,11 @@
     <div class="help">
       Each card is a simulated device talking to the same broker as the controller.
       The controller only ever sees <b>sensor says</b>; <b>truth</b> is the simulator's own view.
-      Break a sensor and watch the controller do the right thing with the wrong information.
+      Each species tells the controller what it likes (the green band), so a cactus is watered at 5&nbsp;% and a fern at 55&nbsp;%.
+      Overwatering rots roots, frost and heat kill what cannot take them — try live weather from somewhere far away.
+      Turn on breakdowns and things fail on their own: the device notices a dead pump itself; a stuck sensor is caught by
+      the controller from what it sees in the readings; a drifting one is the hard case nobody notices until the plant
+      suffers. Whatever broke, only the technician fixes it.
     </div>
   </aside>
 </main>
@@ -104,7 +142,7 @@
 
 <script>
 (() => {
-  const SPEEDS = [1, 2, 5, 10, 25, 50, 100];
+  const SPEEDS = [1, 2, 5, 10, 25, 50];   // beyond 50x a dose evaporates faster than the controller's cooldown
   const THRESHOLD = 25;            // the controller's default; drawn on the humidity bar
   const plants = new Map();        // deviceId -> {deviceId, online, telemetry, state, lastCommand}
   const cards = new Map();         // deviceId -> card element
@@ -126,6 +164,9 @@
         plants.clear();
         ev.plants.forEach(p => plants.set(p.deviceId, p));
         renderAll();
+        syncWeather();
+        syncWear();
+        loadProfiles();
         break;
       case 'telemetry': {
         const p = plant(ev.deviceId);
@@ -140,10 +181,23 @@
         if (ev.name === 'simulation' && before) {
           if (ev.value.waterings > before.waterings) log(`${p.deviceId} was watered (${ev.value.waterings}×)`, 'water');
           if (ev.value.fault !== before.fault) log(`${p.deviceId}: sensor ${ev.value.fault === 'NONE' ? 'repaired' : 'fault ' + ev.value.fault}`, 'fault');
-          if (before.alive && !ev.value.alive) log(`${p.deviceId} died`, 'dead');
+          if (before.alive && !ev.value.alive) log(`${p.deviceId} died of ${(ev.value.causeOfDeath || '').toLowerCase().replace('_', ' ')}`, 'dead');
+          if (ev.value.weatherLabel !== before.weatherLabel) { log(`weather: ${ev.value.weatherLabel} (${ev.value.weatherSource})`); syncWeather(); }
+          if (before.job && !ev.value.job) log(`${p.deviceId}: ${before.job === 'technician' ? 'sensor replaced by the technician' : 'repotted, a new seedling'}`, 'fleet');
+          if (!before.job && ev.value.job) log(`${p.deviceId}: ${ev.value.job === 'technician' ? 'technician called' : 'repotting scheduled'}`);
+          if (ev.value.pump !== before.pump) log(`${p.deviceId}: pump ${ev.value.pump === 'FAILED' ? 'reports no flow' : 'working again'}`, ev.value.pump === 'FAILED' ? 'dead' : 'fleet');
+          if (ev.value.wearMeanTicks !== before.wearMeanTicks) syncWear();
           if (ev.value.speed !== before.speed) syncSpeed();
         }
         if (ev.name === 'lastReboot') log(`${p.deviceId} rebooted`);
+        update(p);
+        break;
+      }
+      case 'alert': {
+        const p = plant(ev.deviceId);
+        p.alerts = p.alerts || {};
+        if (ev.value) { p.alerts[ev.name] = ev.value; log(`controller: ${p.deviceId} — ${ev.value.message || ev.name}`, 'alert'); }
+        else { delete p.alerts[ev.name]; log(`controller: ${p.deviceId} — ${ev.name} cleared`); }
         update(p);
         break;
       }
@@ -162,7 +216,7 @@
         break;
       }
       case 'fleet':
-        log(`fleet: ${ev.command} ${ev.payload ? JSON.stringify(ev.payload) : ''}`, 'fleet');
+        if (!ev.command.startsWith('list')) log(`fleet: ${ev.command} ${ev.payload ? JSON.stringify(ev.payload) : ''}`, 'fleet');
         break;
       case 'removed':
         plants.delete(ev.deviceId);
@@ -198,10 +252,12 @@
     el.className = 'card';
     el.innerHTML = `
       <div class="title"><h2></h2><span class="badge" data-f="badge"></span></div>
-      <div class="stage" data-f="stage"></div>
+      <div class="species" data-f="species"></div>
+      <div class="alerts" data-f="alerts"></div>
+      <div class="stage"><span class="sky" data-f="sky"></span><div data-f="stage"></div></div>
       <div class="stats">
         <span class="k">sensor says</span><span class="v" data-f="reported">–</span>
-        <div class="bar" style="grid-column:1/-1"><i data-f="reportedBar"></i><span class="th" style="left:${THRESHOLD}%"></span><span class="truth" data-f="truthMark"></span></div>
+        <div class="bar" style="grid-column:1/-1"><span class="band" data-f="band"></span><i data-f="reportedBar"></i><span class="th" data-f="th" style="left:${THRESHOLD}%"></span><span class="truth" data-f="truthMark"></span></div>
         <span class="k">truth</span><span class="v" data-f="truth">–</span>
         <span class="k">temperature</span><span class="v" data-f="temp">–</span>
         <span class="k">health</span><span class="v" data-f="health">–</span>
@@ -209,22 +265,22 @@
         <span class="k">growth</span><span class="v" data-f="growth">–</span>
         <div class="bar" style="grid-column:1/-1"><i class="growth" data-f="growthBar"></i></div>
         <span class="k">waterings</span><span class="v" data-f="waterings">–</span>
+        <span class="k">sensor</span><span class="v" data-f="sensor">–</span>
+        <span class="k">pump</span><span class="v" data-f="pump">–</span>
       </div>
       <div class="actions">
         <button data-a="water" title="Send the water command, as the controller would">💧 Water</button>
-        <select data-a="fault" title="Break or repair the humidity sensor">
-          <option value="NONE">sensor: healthy</option>
-          <option value="STUCK">sensor: stuck</option>
-          <option value="OVERREAD">sensor: over-reading</option>
-          <option value="SILENT">sensor: silent</option>
-        </select>
+        <button data-a="repair" title="Send a technician: sensor recalibrated or replaced, pump serviced">🔧 Technician</button>
+        <button data-a="repot" title="A fresh seedling of the same species">🪴 Repot</button>
         <span class="spacer"></span>
         <button data-a="remove" class="danger" title="Remove this plant from its device process">Remove</button>
       </div>
+      <div class="job" data-f="job"></div>
       <div class="last" data-f="last"></div>`;
     el.querySelector('h2').textContent = id;
     el.querySelector('[data-a=water]').onclick = () => command(id, 'water');
-    el.querySelector('[data-a=fault]').onchange = e => command(id, 'fault', { type: e.target.value });
+    el.querySelector('[data-a=repair]').onclick = () => command(id, 'callTechnician');
+    el.querySelector('[data-a=repot]').onclick = () => command(id, 'repot');
     el.querySelector('[data-a=remove]').onclick = () => api('DELETE', `/api/plants/${encodeURIComponent(id)}`);
     return el;
   }
@@ -243,13 +299,30 @@
     el.classList.toggle('dead', !alive);
     const badge = f('badge');
     if (!p.online) { badge.textContent = 'offline'; badge.className = 'badge off'; }
-    else if (!alive) { badge.textContent = 'dead'; badge.className = 'badge dead'; }
-    else if (fault !== 'NONE') { badge.textContent = 'sensor ' + fault.toLowerCase(); badge.className = 'badge fault'; }
+    else if (!alive) { badge.textContent = 'dead · ' + (sim.causeOfDeath || '').toLowerCase().replace('_', ' '); badge.className = 'badge dead'; }
+    else if (sim.job) { badge.textContent = sim.job === 'technician' ? 'technician due' : 'repotting'; badge.className = 'badge job'; }
+    else if (fault !== 'NONE' || sim.pump === 'FAILED') { badge.textContent = 'needs technician'; badge.className = 'badge fault'; }
     else { badge.textContent = 'healthy'; badge.className = 'badge'; }
+
+    const prof = p.state.profile;
+    f('species').innerHTML = sim.profileName
+      ? `${sim.profileName}${prof ? ` · likes ${prof.minHumidity}–${prof.maxHumidity} %` : ''}` : '';
+    if (prof) { f('band').style.left = prof.minHumidity + '%'; f('band').style.width = (prof.maxHumidity - prof.minHumidity) + '%'; f('th').style.left = prof.minHumidity + '%'; }
+    const alertNames = { sensorStuck: 'sensor looks stuck', wateringIneffective: 'watering had no effect', silent: 'device is silent', pumpFault: 'device rejected watering' };
+    const alertHtml = Object.entries(p.alerts || {}).map(([name, a]) =>
+      `<div class="alert">⚠ <b>controller:</b> ${alertNames[name] || name} — ${a && a.message ? a.message : ''}</div>`);
+    if (sim.pump === 'FAILED') alertHtml.push('<div class="pump">⛔ <b>device:</b> pump reports no flow</div>');
+    f('alerts').innerHTML = alertHtml.join('');
+    f('sky').textContent = weatherIcon(sim.weather);
+    f('sky').title = sim.weatherLabel ? `${sim.weatherLabel} (${sim.weatherSource})` : '';
+    f('job').textContent = sim.job ? `${sim.job === 'technician' ? 'Technician' : 'Repotting'} due ${time(sim.jobDoneAt)}` : '';
+    el.querySelector('[data-a=repair]').disabled = !p.online || !!sim.job;
+    el.querySelector('[data-a=repot]').disabled = !p.online || !!sim.job;
 
     const silent = fault === 'SILENT';
     f('reported').textContent = silent ? 'silent' : reported == null ? '–' : pct(reported);
-    f('reported').className = 'v ' + (silent ? 'warn' : reported != null && reported < THRESHOLD ? 'bad' : '');
+    const threshold = prof ? prof.minHumidity : THRESHOLD;
+    f('reported').className = 'v ' + (silent ? 'warn' : reported != null && reported < threshold ? 'bad' : '');
     f('reportedBar').style.width = (silent || reported == null ? 0 : reported) + '%';
     f('truthMark').style.left = (truth == null ? 0 : truth) + '%';
     f('truthMark').style.display = truth == null ? 'none' : '';
@@ -262,14 +335,20 @@
     f('growth').textContent = sim.growth != null ? pct(sim.growth) : '–';
     f('growthBar').style.width = (sim.growth || 0) + '%';
     f('waterings').textContent = sim.waterings != null ? sim.waterings : '–';
-    const sel = el.querySelector('[data-a=fault]');
-    if (sel.value !== fault) sel.value = fault;
+    const faultNames = { NONE: 'healthy', STUCK: 'stuck', DRIFT: 'drifting', OVERREAD: 'over-reading', SILENT: 'silent' };
+    f('sensor').textContent = faultNames[fault] || fault.toLowerCase();
+    f('sensor').className = 'v ' + (fault === 'NONE' ? '' : 'bad');
+    f('pump').textContent = sim.pump === 'FAILED' ? 'no flow' : sim.pump ? 'ok' : '–';
+    f('pump').className = 'v ' + (sim.pump === 'FAILED' ? 'bad' : '');
     el.querySelector('[data-a=water]').disabled = !p.online;
     f('last').textContent = p.lastCommand ? `last command: ${p.lastCommand} at ${time(p.lastCommandAt)}` : '';
     f('stage').innerHTML = plantSvg(sim.growth ?? 10, sim.health ?? 70, alive, truth ?? 50, sim.speed || 1);
   }
 
   function pct(v) { return v.toFixed(1) + ' %'; }
+  function weatherIcon(kind) {
+    return { CLEAR: '☀️', CLOUDY: '⛅', FOG: '🌫️', RAIN: '🌧️', STORM: '⛈️', SNOW: '🌨️', DROUGHT: '🏜️', HEATWAVE: '🔥', COLD: '❄️' }[kind] || '';
+  }
   function time(iso) { return iso ? new Date(iso).toLocaleTimeString() : ''; }
 
   // health 100 → green, 50 → yellow-green, 0 → brown
@@ -347,12 +426,66 @@
     if (idx >= 0 && document.activeElement !== speedIn) { speedIn.value = idx; speedOut.textContent = common + '×'; }
   }
 
+  // A new plant is named after its species, numbered if that name is taken: mint, mint-2, mint-3.
   document.getElementById('addForm').onsubmit = async e => {
     e.preventDefault();
-    const input = document.getElementById('addName');
-    const ok = await api('POST', '/api/plants', { deviceId: input.value.trim() });
-    if (ok) input.value = '';
+    const profile = document.getElementById('addProfile').value;
+    if (!profile) return;
+    let deviceId = profile, n = 1;
+    while (plants.has(deviceId)) deviceId = `${profile}-${++n}`;
+    await api('POST', '/api/plants', { deviceId, profile });
   };
+
+  async function loadProfiles() {
+    try {
+      const res = await fetch('/api/profiles');
+      const body = await res.json();
+      const select = document.getElementById('addProfile');
+      const profiles = (body.payload && body.payload.profiles) || [];
+      const current = select.value;
+      select.innerHTML = '<option value="" disabled>choose a species…</option>' +
+        profiles.map(p => `<option value="${p.id}">${p.name} · ${p.latinName} · likes ${p.minHumidity}–${p.maxHumidity} %</option>`).join('');
+      select.value = current || '';
+    } catch (e) { /* no device process yet; the select stays minimal */ }
+  }
+
+  const weatherMode = document.getElementById('weatherMode');
+  const weatherPlace = document.getElementById('weatherPlace');
+  const weatherApply = document.getElementById('weatherApply');
+  weatherMode.onchange = () => {
+    const live = weatherMode.value === 'real';
+    weatherPlace.hidden = !live; weatherApply.hidden = !live;
+    if (live) { weatherPlace.focus(); } else { api('POST', '/api/weather', { mode: weatherMode.value }); }
+  };
+  document.getElementById('weatherForm').onsubmit = e => {
+    e.preventDefault();
+    const place = weatherPlace.value.trim();
+    if (place) api('POST', '/api/weather', { mode: 'real', place });
+  };
+
+  const wearIn = document.getElementById('wear');
+  wearIn.onchange = () => api('POST', '/api/wear', { meanTicks: Number(wearIn.value) });
+  function syncWear() {
+    const p = [...plants.values()].find(x => x.state.simulation && x.state.simulation.wearMeanTicks != null);
+    if (!p || document.activeElement === wearIn) return;
+    const mean = p.state.simulation.wearMeanTicks;
+    let option = [...wearIn.options].find(o => Number(o.value) === mean);
+    if (!option) { option = document.createElement('option'); option.value = mean; option.textContent = `breakdowns: every ~${mean} readings`; wearIn.appendChild(option); }
+    wearIn.value = option.value;
+  }
+
+  function syncWeather() {
+    const p = [...plants.values()].find(x => x.state.simulation && x.state.simulation.weatherLabel);
+    if (!p) return;
+    const sim = p.state.simulation;
+    document.getElementById('weatherNow').textContent = `${weatherIcon(sim.weather)} ${sim.weatherLabel} · ${sim.weatherSource}`;
+    const src = sim.weatherSource;
+    const mode = ['clear', 'rain', 'drought', 'heatwave', 'cold', 'auto'].includes(src) ? src : 'real';
+    if (document.activeElement !== weatherMode && document.activeElement !== weatherPlace && weatherMode.value !== mode) {
+      weatherMode.value = mode;
+      weatherPlace.hidden = mode !== 'real'; weatherApply.hidden = mode !== 'real';
+    }
+  }
 
   function command(id, name, payload) {
     return api('POST', `/api/plants/${encodeURIComponent(id)}/commands/${name}`, payload);
@@ -363,6 +496,7 @@
       const res = await fetch(path, { method, headers: { 'Content-Type': 'application/json' }, body: payload ? JSON.stringify(payload) : null });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) { toast(body.message || (body.payload && body.payload.message) || `${res.status} ${res.statusText}`); return false; }
+      if (body.message) toast(body.message);
       return true;
     } catch (err) { toast(err.message); return false; }
   }

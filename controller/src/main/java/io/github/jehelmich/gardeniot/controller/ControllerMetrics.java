@@ -10,6 +10,7 @@ public final class ControllerMetrics {
     static final String HUMIDITY = "gardeniot_controller_humidity_percent";
     static final String TEMPERATURE = "gardeniot_controller_temperature_celsius";
     static final String WATERING_COMMANDS_TOTAL = "gardeniot_controller_watering_commands_total";
+    static final String ALERT = "gardeniot_controller_alert";
 
     private final Metrics metrics;
 
@@ -27,6 +28,14 @@ public final class ControllerMetrics {
                 "Air temperature as last reported by the device",
                 telemetry.deviceId(),
                 telemetry.temperature());
+    }
+
+    void alert(String deviceId, String alert, boolean active) {
+        metrics.gauge(
+                ALERT + "_" + alert.toLowerCase(java.util.Locale.ROOT),
+                "1 while the controller's " + alert + " alert is active",
+                deviceId,
+                active ? 1 : 0);
     }
 
     void wateringCommand(String deviceId, String outcome) {

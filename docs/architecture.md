@@ -22,6 +22,8 @@ transports and choose at start-up; neither application class imports an SDK type
 | `CommandHandler` → `CommandResult` | device | request on `…/cmd/{name}`, reply on the request's response topic with its correlation data | direct method callback |
 | `DeviceTransport.reportState` | device | retained `…/state/{name}` | reported twin property |
 | `FleetChannel` | device | shared subscription `$share/fleet/…/_fleet/cmd/+` | not offered: hub devices must be registered |
+| `DeviceProfileSource` | cloud | cache of retained `…/state/profile` topics | `TwinClient.get` → reported property `profile`, cached |
+| `AlertPublisher` | cloud | retained `…/alert/{name}`, cleared by an empty message | `TwinClient.patch` → desired property `alerts.{name}` |
 | `TelemetrySource` | cloud | subscription on `…/+/telemetry` | `EventHubConsumerAsyncClient` on the built-in endpoint |
 | `DeviceCommandSender` | cloud | request/response with a per-client reply topic | `DirectMethodsClient.invoke` |
 
@@ -35,6 +37,7 @@ device code is identical on both transports.
 garden/{deviceId}/telemetry         readings, QoS 1
 garden/{deviceId}/state/{name}      retained state ("device twin")
 garden/{deviceId}/status            retained online/offline, set by the last will
+garden/{deviceId}/alert/{name}      the controller's alerts, retained
 garden/{deviceId}/cmd/{command}     command requests
 garden/_fleet/cmd/{command}         fleet commands, shared subscription
 garden/_reply/{clientId}            command replies for one cloud-side client
@@ -44,11 +47,13 @@ garden/_reply/{clientId}            command replies for one cloud-side client
 
 ```
 DeviceApp ──▶ DeviceFleet ──▶ VirtualDevice ×N
-                 │                 ├── PlantSimulation   (truth)
+                 │                 ├── PlantSimulation   (truth: species profile, health, growth)
+                 │                 ├── WeatherProvider   (fixed / auto / Open-Meteo)
                  │                 ├── SensorFault       (what gets reported)
+                 │                 ├── RandomFaults      (wear: sensor stuck/drift/silent, pump)
                  │                 ├── DeviceCommands    (CommandHandler)
                  │                 └── DeviceTransport
-                 └── FleetChannel (addPlant / removePlant / listPlants)
+                 └── FleetChannel (addPlant / removePlant / listPlants / listProfiles)
 ```
 
 Each `VirtualDevice` reschedules its own telemetry tick, so `setSpeed` takes
@@ -61,7 +66,9 @@ and exposes the same as gauges, which is how observers can see a sensor lie.
 
 ```
 TelemetrySource ──▶ TelemetryProcessor ──▶ WateringPolicy ──▶ WateringActuator ──▶ DeviceCommandSender
-                          │                     (threshold, per-device cooldown, injected Clock)
+                          │      ▲                (per-plant threshold, cooldown, injected Clock)
+                          │      └── DeviceProfileSource (what each plant said it needs)
+                          ├──▶ AnomalyDetector ──▶ AlertPublisher   (stuck, ineffective, silent, pump)
                           └──▶ ControllerMetrics
 ```
 
