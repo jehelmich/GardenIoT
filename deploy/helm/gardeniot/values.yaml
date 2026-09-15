@@ -78,7 +78,7 @@ monitoring:
       requests: {cpu: 50m, memory: 256Mi}
       limits: {memory: 512Mi}
   grafana:
-    image: grafana/grafana:13.2.1
+    image: grafana/grafana:13.2.2
     # Anonymous admin access: fine for a demo cluster, not for anything reachable from the internet.
     anonymousAdmin: true
     # Grafana 13 needs a good 300 MiB to start; 256 gets it OOM-killed mid-boot.

@@ -57,7 +57,7 @@
     <!-- Observability -->
     <micrometer.version>1.17.1</micrometer.version>
 
-    <!-- Transitive: the IoT service SDK declares a Jackson release candidate; hold the line at what azure-core uses -->
+    <!-- Transitive: the IoT service SDK declares a 2022 Jackson release candidate; pin a current release instead -->
     <jackson.version>2.22.2</jackson.version>
 
     <!-- Libraries -->
