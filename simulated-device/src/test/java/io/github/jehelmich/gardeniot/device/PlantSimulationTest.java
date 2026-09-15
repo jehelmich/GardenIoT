@@ -1,8 +1,8 @@
 package io.github.jehelmich.gardeniot.device;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
+import io.github.jehelmich.gardeniot.device.PlantSimulation.CauseOfDeath;
 import java.util.Random;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
@@ -10,100 +10,133 @@ import org.junit.jupiter.api.Test;
 class PlantSimulationTest {
 
     private static final long SEED = 42L;
+    private static final PlantProfile BASIL = PlantProfile.byId("basil").orElseThrow();
+    private static final PlantProfile CACTUS = PlantProfile.byId("cactus").orElseThrow();
+
+    private static PlantSimulation plant(PlantProfile profile) {
+        return new PlantSimulation(profile, new Random(SEED));
+    }
+
+    private static void run(PlantSimulation plant, WeatherConditions weather, int steps) {
+        IntStream.range(0, steps).forEach(i -> plant.next(weather));
+    }
 
     @Test
-    void soilDriesOutWithEveryReading() {
-        PlantSimulation plant = new PlantSimulation(15.0, 15.0, new Random(SEED));
+    void soilDriesOutWithEveryReadingAndNeverBelowTheFloor() {
+        PlantSimulation plant = plant(BASIL);
         double before = plant.current().humidity();
 
-        double after = plant.next().humidity();
+        assertThat(plant.next(WeatherConditions.CLEAR).humidity()).isLessThan(before);
 
-        assertThat(after).isLessThan(before);
+        run(plant, WeatherConditions.CLEAR, 10_000);
+        assertThat(plant.current().humidity()).isEqualTo(3.0);
     }
 
     @Test
-    void soilNeverDriesBelowTheMinimum() {
-        PlantSimulation plant = new PlantSimulation(15.0, 20.0, new Random(SEED));
+    void thirstyPlantsDryTheirSoilFaster() {
+        PlantSimulation mint = plant(PlantProfile.byId("mint").orElseThrow());
+        PlantSimulation cactus = plant(CACTUS);
 
-        IntStream.range(0, 10_000).forEach(i -> plant.next());
+        run(mint, WeatherConditions.CLEAR, 20);
+        run(cactus, WeatherConditions.CLEAR, 20);
 
-        assertThat(plant.current().humidity()).isEqualTo(20.0);
+        assertThat(mint.current().humidity()).isLessThan(cactus.current().humidity());
     }
 
     @Test
-    void wateringSoaksTheSoil() {
-        PlantSimulation plant = new PlantSimulation(15.0, 15.0, new Random(SEED));
-        IntStream.range(0, 50).forEach(i -> plant.next());
+    void wateringAddsADoseRatherThanFlooding() {
+        PlantSimulation plant = plant(BASIL);
+        run(plant, WeatherConditions.CLEAR, 30);
+        double before = plant.current().humidity();
 
         plant.water();
 
+        assertThat(plant.current().humidity()).isEqualTo(before + PlantSimulation.WATERING_DOSE);
+        plant.water();
+        plant.water();
         assertThat(plant.current().humidity()).isEqualTo(100.0);
-        assertThat(plant.next().humidity()).isLessThan(100.0);
     }
 
     @Test
-    void temperatureRandomWalksInSmallSteps() {
-        PlantSimulation plant = new PlantSimulation(15.0, 15.0, new Random(SEED));
-        double previous = plant.current().temperature();
+    void rainWetsTheSoilAndDroughtDriesIt() {
+        PlantSimulation rained = plant(BASIL);
+        PlantSimulation parched = plant(BASIL);
 
-        for (int i = 0; i < 1_000; i++) {
-            double next = plant.next().temperature();
-            assertThat(Math.abs(next - previous)).isLessThanOrEqualTo(0.3);
-            previous = next;
-        }
+        run(rained, WeatherConditions.RAIN, 50);
+        run(parched, WeatherConditions.DROUGHT, 50);
+
+        assertThat(rained.current().humidity()).isGreaterThan(26.0);
+        assertThat(parched.current().humidity()).isLessThan(rained.current().humidity());
     }
 
     @Test
-    void temperatureStaysAroundRoomTemperature() {
-        PlantSimulation plant = new PlantSimulation(15.0, 15.0, new Random(SEED));
+    void temperatureFollowsTheWeather() {
+        PlantSimulation plant = plant(BASIL);
 
-        double max = 0;
-        double min = 100;
-        for (int i = 0; i < 100_000; i++) {
-            double t = plant.next().temperature();
-            max = Math.max(max, t);
-            min = Math.min(min, t);
-        }
+        run(plant, WeatherConditions.HEATWAVE, 300);
+        assertThat(plant.current().temperature()).isBetween(33.0, 39.0);
 
-        assertThat(min).isGreaterThan(15.0);
-        assertThat(max).isLessThan(30.0);
+        run(plant, WeatherConditions.COLD, 300);
+        assertThat(plant.current().temperature()).isBetween(0.0, 6.0);
     }
 
     @Test
-    void temperatureRecoversWhenBelowTheMinimum() {
-        PlantSimulation plant = new PlantSimulation(30.0, 15.0, new Random(SEED));
-        double start = plant.current().temperature();
-
-        IntStream.range(0, 100).forEach(i -> plant.next());
-
-        assertThat(plant.current().temperature()).isGreaterThan(start);
-    }
-
-    @Test
-    void aWateredPlantGrowsAndAParchedOneDies() {
-        PlantSimulation plant = new PlantSimulation(15.0, 15.0, new Random(SEED));
+    void aComfortablePlantGrowsAndAParchedOneDiesOfThirst() {
+        PlantSimulation plant = plant(BASIL);
         plant.water();
         double growthBefore = plant.growth();
 
-        IntStream.range(0, 200).forEach(i -> plant.next());
+        run(plant, WeatherConditions.CLEAR, 150);
 
         assertThat(plant.health()).isGreaterThan(PlantSimulation.INITIAL_HEALTH);
         assertThat(plant.growth()).isGreaterThan(growthBefore);
-        assertThat(plant.isAlive()).isTrue();
 
-        // Now leave it: the soil dries below the parched line and health drains to zero.
-        IntStream.range(0, 2_000).forEach(i -> plant.next());
+        run(plant, WeatherConditions.DROUGHT, 3_000);
 
-        assertThat(plant.current().humidity()).isLessThan(PlantSimulation.PARCHED_HUMIDITY);
         assertThat(plant.isAlive()).isFalse();
+        assertThat(plant.causeOfDeath()).isEqualTo(CauseOfDeath.THIRST);
         double growthAtDeath = plant.growth();
         plant.water();
-        IntStream.range(0, 200).forEach(i -> plant.next());
+        run(plant, WeatherConditions.CLEAR, 100);
         assertThat(plant.growth()).as("a dead plant does not grow back").isEqualTo(growthAtDeath);
     }
 
     @Test
-    void rejectsAnImpossibleMinimumHumidity() {
-        assertThatIllegalArgumentException().isThrownBy(() -> new PlantSimulation(15.0, 101.0, new Random(SEED)));
+    void overwateringKillsByRootRot() {
+        PlantSimulation cactus = plant(CACTUS);
+
+        cactus.water();
+        cactus.water();
+        run(cactus, WeatherConditions.CLEAR, 400);
+
+        assertThat(cactus.isAlive()).isFalse();
+        assertThat(cactus.causeOfDeath()).isEqualTo(CauseOfDeath.ROOT_ROT);
+    }
+
+    @Test
+    void frostKillsATenderPlantButNotAHardyOne() {
+        PlantSimulation basil = plant(BASIL);
+        PlantSimulation lavender = plant(PlantProfile.byId("lavender").orElseThrow());
+        basil.water();
+        // Lavender at 26% is comfortable already; watering it would drown it, which is a different test.
+
+        run(basil, WeatherConditions.COLD, 600);
+        run(lavender, WeatherConditions.COLD, 600);
+
+        assertThat(basil.isAlive()).isFalse();
+        assertThat(basil.causeOfDeath()).isEqualTo(CauseOfDeath.FROST);
+        assertThat(lavender.isAlive()).isTrue();
+    }
+
+    @Test
+    void heatKillsWhatCannotTakeIt() {
+        PlantSimulation lettuce = plant(PlantProfile.byId("lettuce").orElseThrow());
+        lettuce.water();
+        lettuce.water();
+
+        run(lettuce, WeatherConditions.HEATWAVE, 600);
+
+        assertThat(lettuce.isAlive()).isFalse();
+        assertThat(lettuce.causeOfDeath()).isEqualTo(CauseOfDeath.HEAT);
     }
 }

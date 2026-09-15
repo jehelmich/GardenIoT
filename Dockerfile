@@ -22,8 +22,10 @@ ARG MODULE
 LABEL org.opencontainers.image.source="https://github.com/jehelmich/GardenIoT" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.title="gardeniot-${MODULE}"
-# A numeric UID so that Kubernetes can verify runAsNonRoot without inspecting /etc/passwd.
-RUN addgroup -S -g 10001 app && adduser -S -u 10001 -G app app
+# Pick up Alpine's security patches published since the base image was built, then add a
+# numeric UID so that Kubernetes can verify runAsNonRoot without inspecting /etc/passwd.
+RUN apk --no-cache upgrade \
+    && addgroup -S -g 10001 app && adduser -S -u 10001 -G app app
 USER 10001:10001
 WORKDIR /app
 COPY --from=build --chown=10001:10001 /src/${MODULE}/target/${MODULE}.jar app.jar

@@ -14,6 +14,7 @@ public final class DeviceMetrics {
     static final String TEMPERATURE = "gardeniot_device_temperature_celsius";
     static final String SPEED = "gardeniot_device_speed_factor";
     static final String FAULT = "gardeniot_device_sensor_fault_code";
+    static final String PUMP_FAILED = "gardeniot_device_pump_failed";
     static final String HEALTH = "gardeniot_device_plant_health_percent";
     static final String GROWTH = "gardeniot_device_plant_growth_percent";
     static final String TELEMETRY_SENT_TOTAL = "gardeniot_device_telemetry_sent_total";
@@ -27,13 +28,24 @@ public final class DeviceMetrics {
     }
 
     void tick(
-            String deviceId, Reading truth, Reading reported, SensorFault fault, double speed, PlantSimulation plant) {
+            String deviceId,
+            Reading truth,
+            Reading reported,
+            SensorFault fault,
+            boolean pumpFailed,
+            double speed,
+            PlantSimulation plant) {
+        metrics.gauge(PUMP_FAILED, "1 while the pump delivers no water", deviceId, pumpFailed ? 1 : 0);
         metrics.gauge(HEALTH, "Plant health: 0 dead, 100 thriving", deviceId, plant.health());
         metrics.gauge(GROWTH, "Plant growth: 0 seedling, 100 fully grown", deviceId, plant.growth());
         metrics.gauge(TRUE_HUMIDITY, "Actual soil humidity in the simulation", deviceId, truth.humidity());
         metrics.gauge(TEMPERATURE, "Air temperature in the simulation", deviceId, truth.temperature());
         metrics.gauge(SPEED, "Simulation speed factor", deviceId, speed);
-        metrics.gauge(FAULT, "Sensor fault: 0 none, 1 stuck, 2 over-reading, 3 silent", deviceId, fault.ordinal());
+        metrics.gauge(
+                FAULT,
+                "Sensor fault: 0 none, 1 stuck, 2 drifting, 3 over-reading, 4 silent",
+                deviceId,
+                fault.ordinal());
         if (reported != null) {
             metrics.gauge(REPORTED_HUMIDITY, "Soil humidity as the sensor reported it", deviceId, reported.humidity());
             metrics.counter(TELEMETRY_SENT_TOTAL, "Readings published", Metrics.DEVICE_TAG, deviceId)

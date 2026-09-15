@@ -40,9 +40,11 @@ class UiServerTest {
         @Override
         public CommandResult sendToFleet(String command, Object payload) {
             sent.add("fleet:" + command + ":" + payload);
-            return command.equals("addPlant")
-                    ? CommandResult.ok(Map.of("deviceId", "thyme"))
-                    : CommandResult.ok(Map.of());
+            return switch (command) {
+                case "addPlant" -> CommandResult.ok(Map.of("deviceId", "thyme"));
+                case "listProfiles" -> CommandResult.ok(Map.of("profiles", java.util.List.of(Map.of("id", "cactus"))));
+                default -> CommandResult.ok(Map.of());
+            };
         }
     }
 
@@ -53,7 +55,15 @@ class UiServerTest {
 
     @BeforeEach
     void start() throws Exception {
-        server = new UiServer(0, model, new GardenApi(sender, model), new Metrics(), () -> true);
+        Geocoder geocoder = new Geocoder(null) {
+            @Override
+            java.util.Optional<Place> lookup(String query) {
+                return query.equals("Lisbon")
+                        ? java.util.Optional.of(new Place("Lisbon, Portugal", 38.7, -9.1))
+                        : java.util.Optional.empty();
+            }
+        };
+        server = new UiServer(0, model, new GardenApi(sender, model, geocoder), new Metrics(), () -> true);
         server.start();
     }
 
@@ -121,6 +131,55 @@ class UiServerTest {
         assertThat(post("/api/nothing", null).statusCode()).isEqualTo(404);
         assertThat(post("/api/plants/ghost/commands/water", null).statusCode()).isEqualTo(504);
         assertThat(sender.sent).containsExactly("ghost:water");
+    }
+
+    @Test
+    void offersProfilesAndPassesTheChosenOneAlong() throws Exception {
+        assertThat(get("/api/profiles").body()).contains("cactus");
+        assertThat(post("/api/plants", "{\"deviceId\":\"spiky\",\"profile\":\"cactus\"}")
+                        .statusCode())
+                .isEqualTo(200);
+
+        assertThat(sender.sent).contains("fleet:addPlant:{deviceId=spiky, profile=cactus}");
+    }
+
+    @Test
+    void geocodesAPlaceBeforeBroadcastingLiveWeather() throws Exception {
+        model.apply(new BusMessage(Kind.STATUS, "basil", null, "online"));
+
+        assertThat(post("/api/weather", "{\"mode\":\"real\",\"place\":\"Lisbon\"}")
+                        .statusCode())
+                .isEqualTo(200);
+        assertThat(post("/api/weather", "{\"mode\":\"real\",\"place\":\"Atlantis\"}")
+                        .statusCode())
+                .isEqualTo(400);
+        assertThat(post("/api/weather", "{\"mode\":\"rain\"}").statusCode()).isEqualTo(200);
+        assertThat(post("/api/weather", "{}").statusCode()).isEqualTo(400);
+
+        assertThat(sender.sent.get(0))
+                .startsWith("basil:setWeather:")
+                .contains("Lisbon, Portugal")
+                .contains("38.7");
+        assertThat(sender.sent.get(1)).isEqualTo("basil:setWeather:{\"mode\":\"rain\"}");
+    }
+
+    @Test
+    void maintenanceCommandsAreAllowed() throws Exception {
+        assertThat(post("/api/plants/basil/commands/callTechnician", null).statusCode())
+                .isEqualTo(200);
+        assertThat(post("/api/plants/basil/commands/repot", null).statusCode()).isEqualTo(200);
+        assertThat(post("/api/plants/basil/commands/pump", "{\"failed\":true}").statusCode())
+                .isEqualTo(200);
+        assertThat(sender.sent).containsExactly("basil:callTechnician", "basil:repot", "basil:pump:{\"failed\":true}");
+    }
+
+    @Test
+    void setsTheBreakdownRateOnEveryPlant() throws Exception {
+        model.apply(new BusMessage(Kind.STATUS, "basil", null, "online"));
+
+        assertThat(post("/api/wear", "{\"meanTicks\":400}").statusCode()).isEqualTo(200);
+        assertThat(post("/api/wear", "{}").statusCode()).isEqualTo(400);
+        assertThat(sender.sent).containsExactly("basil:setWear:{\"meanTicks\":400}");
     }
 
     @Test

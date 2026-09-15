@@ -1,7 +1,10 @@
 package io.github.jehelmich.gardeniot.controller;
 
 import io.github.jehelmich.gardeniot.telemetry.Telemetry;
+import io.github.jehelmich.gardeniot.telemetry.WateringProfile;
 import io.github.jehelmich.gardeniot.transport.CommandException;
+import io.github.jehelmich.gardeniot.transport.DeviceProfileSource;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,32 +20,63 @@ public final class TelemetryProcessor {
 
     private final WateringPolicy policy;
     private final WateringActuator actuator;
+    private final DeviceProfileSource profiles;
     private final ControllerMetrics metrics;
+    private final AnomalyDetector anomalies;
 
     public TelemetryProcessor(WateringPolicy policy, WateringActuator actuator, ControllerMetrics metrics) {
+        this(policy, actuator, DeviceProfileSource.NONE, metrics);
+    }
+
+    public TelemetryProcessor(
+            WateringPolicy policy, WateringActuator actuator, DeviceProfileSource profiles, ControllerMetrics metrics) {
+        this(policy, actuator, profiles, metrics, null);
+    }
+
+    public TelemetryProcessor(
+            WateringPolicy policy,
+            WateringActuator actuator,
+            DeviceProfileSource profiles,
+            ControllerMetrics metrics,
+            AnomalyDetector anomalies) {
         this.policy = policy;
         this.actuator = actuator;
+        this.profiles = profiles;
         this.metrics = metrics;
+        this.anomalies = anomalies;
     }
 
     public void onTelemetry(Telemetry telemetry) {
         metrics.telemetryReceived(telemetry);
+        if (anomalies != null) {
+            anomalies.onTelemetry(telemetry);
+        }
         log.info(
                 "{}: temperature={}°C humidity={}%",
                 telemetry.deviceId(),
                 String.format("%.1f", telemetry.temperature()),
                 String.format("%.1f", telemetry.humidity()));
 
-        if (!policy.shouldWater(telemetry)) {
+        Optional<WateringProfile> profile = profiles.profileOf(telemetry.deviceId());
+        if (!policy.shouldWater(telemetry, profile)) {
             return;
         }
-        log.info("{}: soil is dry, requesting watering", telemetry.deviceId());
+        log.info(
+                "{}: soil is dry for {}, requesting watering",
+                telemetry.deviceId(),
+                profile.map(WateringProfile::name).orElse("the default threshold"));
         try {
             actuator.water(telemetry.deviceId());
             metrics.wateringCommand(telemetry.deviceId(), "accepted");
+            if (anomalies != null) {
+                anomalies.onWateringAccepted(telemetry);
+            }
         } catch (CommandException e) {
             metrics.wateringCommand(telemetry.deviceId(), "failed");
             log.warn("{}: {}", telemetry.deviceId(), e.getMessage());
+            if (anomalies != null && e.isRejection()) {
+                anomalies.onWateringRejected(telemetry.deviceId(), e.getMessage());
+            }
         }
     }
 }

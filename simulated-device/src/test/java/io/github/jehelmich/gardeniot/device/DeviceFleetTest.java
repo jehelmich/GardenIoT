@@ -15,7 +15,13 @@ class DeviceFleetTest {
 
     private final RecordingTransport transport = new RecordingTransport();
     private final DeviceFleet fleet = new DeviceFleet(
-            new DeviceConfig(Transport.MQTT, List.of(), Duration.ofHours(1), Duration.ZERO),
+            new DeviceConfig(
+                    Transport.MQTT,
+                    List.of(),
+                    Duration.ofHours(1),
+                    Duration.ZERO,
+                    WeatherProviders.Setting.of("clear"),
+                    0),
             transport,
             Clock.systemUTC(),
             new DeviceMetrics(new Metrics()));
@@ -41,6 +47,22 @@ class DeviceFleetTest {
                 .isEqualTo(404);
         assertThat(fleet.deviceIds()).isEmpty();
         assertThat(transport.closed).isTrue();
+    }
+
+    @Test
+    void addsASpeciesByProfileOrByName() throws Exception {
+        assertThat(fleet.handle("addPlant", "{\"deviceId\": \"spiky\", \"profile\": \"cactus\"}")
+                        .status())
+                .isEqualTo(200);
+        assertThat(fleet.handle("addPlant", "{\"deviceId\": \"spiky2\", \"profile\": \"triffid\"}")
+                        .status())
+                .isEqualTo(400);
+        fleet.add("mint");
+
+        assertThat(transport.state.get("profile").toString()).contains("Mint");
+        assertThat(fleet.handle("listProfiles", null).payload().toString())
+                .contains("Prickly pear")
+                .contains("Basil");
     }
 
     @Test

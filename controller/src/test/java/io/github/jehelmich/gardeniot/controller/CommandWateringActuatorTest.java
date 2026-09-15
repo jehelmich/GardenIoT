@@ -42,7 +42,8 @@ class CommandWateringActuatorTest {
 
         assertThatExceptionOfType(CommandException.class)
                 .isThrownBy(() -> actuator.water("basil"))
-                .withMessageContaining("404");
+                .withMessageContaining("404")
+                .matches(CommandException::isRejection);
     }
 
     @Test
@@ -53,6 +54,7 @@ class CommandWateringActuatorTest {
 
         assertThatExceptionOfType(CommandException.class)
                 .isThrownBy(() -> actuator.water("basil"))
-                .withMessage("no answer");
+                .withMessage("no answer")
+                .matches(e -> !e.isRejection());
     }
 }

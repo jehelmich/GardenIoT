@@ -35,7 +35,7 @@ services:
       TRANSPORT: mqtt
       MQTT_HOST: mosquitto
       HUMIDITY_THRESHOLD: ${HUMIDITY_THRESHOLD:-25}
-      WATERING_COOLDOWN_SECONDS: ${WATERING_COOLDOWN_SECONDS:-60}
+      WATERING_COOLDOWN_SECONDS: ${WATERING_COOLDOWN_SECONDS:-15}
     ports:
       - "8081:8080"
     depends_on:
@@ -54,6 +54,10 @@ services:
       MQTT_HOST: mosquitto
       DEVICE_IDS: ${DEVICE_IDS:-basil,mint}
       TELEMETRY_INTERVAL_SECONDS: ${TELEMETRY_INTERVAL_SECONDS:-5}
+      # clear | rain | drought | heatwave | cold | auto (changes by itself) | real (needs WEATHER_LATITUDE/LONGITUDE)
+      WEATHER: ${WEATHER:-auto}
+      # Average readings between random breakdowns (sensor stuck/drifting/silent, pump); 0 = never
+      WEAR_MEAN_TICKS: ${WEAR_MEAN_TICKS:-1500}
     depends_on:
       mosquitto:
         condition: service_healthy
