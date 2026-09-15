@@ -81,9 +81,10 @@ monitoring:
     image: grafana/grafana:13.0.8
     # Anonymous admin access: fine for a demo cluster, not for anything reachable from the internet.
     anonymousAdmin: true
+    # Grafana 13 needs a good 300 MiB to start; 256 gets it OOM-killed mid-boot.
     resources:
-      requests: {cpu: 50m, memory: 128Mi}
-      limits: {memory: 256Mi}
+      requests: {cpu: 50m, memory: 256Mi}
+      limits: {memory: 640Mi}
 
 podSecurityContext:
   runAsNonRoot: true

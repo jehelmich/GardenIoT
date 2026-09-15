@@ -228,6 +228,7 @@ jobs:
         if: failure()
         run: |
           kubectl -n gardeniot get pods -o wide || true
+          kubectl -n gardeniot get pods -o custom-columns='POD:.metadata.name,RESTARTS:.status.containerStatuses[*].restartCount,LAST:.status.containerStatuses[*].lastState.terminated.reason' || true
           for pod in $(kubectl -n gardeniot get pods -o name); do
             echo "=== $pod"
             kubectl -n gardeniot describe "$pod" | sed -n '/^Events/,$p' | tail -15
